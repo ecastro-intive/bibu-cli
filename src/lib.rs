@@ -8,6 +8,7 @@ pub mod context;
 pub mod error;
 pub mod output;
 pub mod repo;
+pub mod schema;
 pub mod terminal;
 
 #[cfg(test)]

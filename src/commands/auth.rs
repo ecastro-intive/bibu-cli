@@ -1,5 +1,6 @@
 //! `bibu auth login | status | logout`
 
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::api::models::Account;
@@ -10,10 +11,13 @@ use crate::error::{BibuError, Result};
 use crate::output::Render;
 use crate::terminal::Terminal;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct LoginResult {
+    /// The Atlassian email that was verified.
     pub email: String,
+    /// The Bitbucket account the token belongs to.
     pub account: Account,
+    /// Where the login was saved: `keychain` or `file`.
     pub stored_in: Source,
 }
 
@@ -26,11 +30,15 @@ impl Render for LoginResult {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct StatusResult {
+    /// Always true: an invalid or missing login is an error (exit 3), not `false` here.
     pub authenticated: bool,
+    /// Where the active credentials come from: `env`, `keychain` or `file`.
     pub source: Source,
+    /// Email of the active credentials.
     pub email: String,
+    /// The Bitbucket account the token belongs to.
     pub account: Account,
 }
 
@@ -43,8 +51,9 @@ impl Render for StatusResult {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct LogoutResult {
+    /// Whether a stored login was found and removed.
     pub removed: bool,
     /// `BIBU_EMAIL` / `BIBU_TOKEN` are still set, so requests stay authenticated.
     pub env_credentials_still_set: bool,

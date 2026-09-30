@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
@@ -18,12 +19,15 @@ use crate::terminal::Terminal;
 // ---------------------------------------------------------------- output types
 
 /// Where a comment sits. `side` is `new`, `old`, or `file` for a whole-file comment.
-#[derive(Debug, Serialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, PartialEq, Eq, JsonSchema)]
 pub struct InlineRow {
+    /// File path, relative to the repository root.
     pub path: String,
+    /// First line (the only line for a single-line comment); null for a whole-file comment.
     pub line: Option<u64>,
     /// Last line when the comment spans a range.
     pub end_line: Option<u64>,
+    /// Which version of the file the lines refer to: `new`, `old`, or `file` for a whole-file comment.
     pub side: &'static str,
 }
 
@@ -54,19 +58,31 @@ impl From<&Inline> for InlineRow {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct CommentRow {
+    /// Comment number.
     pub id: u64,
+    /// Number of the comment this replies to; null for the start of a thread.
     pub parent_id: Option<u64>,
+    /// Who wrote the comment.
     pub author: Option<Account>,
+    /// ISO 8601 creation time.
     pub created_on: String,
+    /// ISO 8601 time of the last edit.
     pub updated_on: String,
+    /// Comment text (markdown).
     pub content: String,
+    /// Where the comment is anchored; null for a general comment.
     pub inline: Option<InlineRow>,
+    /// Whether the thread is resolved (recorded on the thread's first comment).
     pub resolved: bool,
+    /// Who resolved the thread, when Bitbucket reports it.
     pub resolved_by: Option<Account>,
+    /// Deleted comments are hidden from `list` unless `--include-deleted`.
     pub deleted: bool,
+    /// A draft comment of an unfinished review.
     pub pending: bool,
+    /// Link to the comment in Bitbucket.
     pub url: String,
 }
 
@@ -146,7 +162,7 @@ impl Render for CommentRow {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 #[serde(transparent)]
 pub struct CommentList(pub Vec<CommentRow>);
 
@@ -190,10 +206,13 @@ impl Render for CommentList {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct CommentAction {
+    /// Pull request number.
     pub pull_request: u64,
+    /// Comment number.
     pub comment: u64,
+    /// What happened: `deleted`, `resolved` or `reopened`.
     pub action: &'static str,
 }
 

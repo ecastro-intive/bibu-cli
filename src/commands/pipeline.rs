@@ -2,6 +2,7 @@
 
 use comfy_table::presets::NOTHING;
 use comfy_table::Table;
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::api::models::pipeline::{Pipeline, Step};
@@ -14,22 +15,31 @@ use crate::repo::RepoRef;
 
 // ---------------------------------------------------------------- output types
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct PipelineRow {
+    /// Pipeline uuid, with braces.
     pub uuid: String,
+    /// Run number, as shown in Bitbucket.
     pub build_number: u64,
     /// `successful`, `failed`, `stopped`, `error`, `running`, `paused`, `pending`, ...
     pub status: String,
+    /// Branch (or tag) the run is for.
     pub branch: String,
     /// `branch`, `tag`, ...
     pub ref_type: String,
+    /// Full hash of the commit that was built.
     pub commit: Option<String>,
     /// `PUSH`, `MANUAL`, `SCHEDULED`, ...
     pub trigger: Option<String>,
+    /// Who triggered the run.
     pub creator: Option<Account>,
+    /// ISO 8601 time the run was created.
     pub created_on: String,
+    /// ISO 8601 time the run finished; null while it is running.
     pub completed_on: Option<String>,
+    /// Build time in seconds; null until known.
     pub duration_seconds: Option<u64>,
+    /// Link to the run in Bitbucket.
     pub url: String,
 }
 
@@ -64,13 +74,19 @@ impl PipelineRow {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct StepRow {
+    /// Step uuid, with braces.
     pub uuid: String,
+    /// Step name from bitbucket-pipelines.yml.
     pub name: String,
+    /// Same vocabulary as the run status.
     pub status: String,
+    /// ISO 8601 time the step started; null if it has not.
     pub started_on: Option<String>,
+    /// ISO 8601 time the step finished; null while running.
     pub completed_on: Option<String>,
+    /// Step time in seconds; null until known.
     pub duration_seconds: Option<u64>,
 }
 
@@ -104,7 +120,7 @@ fn opt_duration(seconds: Option<u64>) -> String {
     seconds.map(duration).unwrap_or_default()
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 #[serde(transparent)]
 pub struct PipelineList(pub Vec<PipelineRow>);
 
@@ -141,10 +157,12 @@ impl Render for PipelineList {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct PipelineDetail {
+    /// The run (its fields are flattened into this object).
     #[serde(flatten)]
     pub pipeline: PipelineRow,
+    /// Steps in execution order.
     pub steps: Vec<StepRow>,
 }
 
@@ -189,18 +207,23 @@ impl Render for PipelineDetail {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct StepLog {
+    /// Step uuid, with braces.
     pub uuid: String,
+    /// Step name.
     pub name: String,
+    /// Step status, same vocabulary as the run status.
     pub status: String,
     /// `None` when Bitbucket has no log for the step yet (for example it has not started).
     pub log: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct LogsResult {
+    /// Build number of the run.
     pub pipeline: u64,
+    /// Logs of the selected steps, in order.
     pub steps: Vec<StepLog>,
 }
 

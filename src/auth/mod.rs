@@ -8,6 +8,7 @@ pub mod store;
 use std::fmt;
 
 use reqwest::blocking::RequestBuilder;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{BibuError, Result};
@@ -30,7 +31,7 @@ impl fmt::Debug for Credentials {
 }
 
 /// Where the active credentials came from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Source {
     Env,

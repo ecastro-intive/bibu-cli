@@ -2,6 +2,7 @@
 
 use comfy_table::presets::NOTHING;
 use comfy_table::Table;
+use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -15,15 +16,21 @@ use crate::output::{render, Mode, Render};
 use crate::repo::RepoRef;
 use crate::terminal::Terminal;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct TaskRow {
+    /// Task number.
     pub id: u64,
     /// `RESOLVED` or `UNRESOLVED`.
     pub state: String,
+    /// Task text.
     pub content: String,
+    /// Who created the task.
     pub creator: Option<Account>,
+    /// ISO 8601 creation time.
     pub created_on: String,
+    /// Who resolved it, when resolved.
     pub resolved_by: Option<Account>,
+    /// ISO 8601 time it was resolved.
     pub resolved_on: Option<String>,
     /// The comment this task is attached to, if any.
     pub comment_id: Option<u64>,
@@ -78,7 +85,7 @@ impl Render for TaskRow {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 #[serde(transparent)]
 pub struct TaskList(pub Vec<TaskRow>);
 

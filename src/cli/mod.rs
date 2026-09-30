@@ -61,6 +61,23 @@ pub enum Command {
         #[command(subcommand)]
         command: MemberCommand,
     },
+    /// Describe every command, argument and output as JSON (for agents and tools)
+    #[command(
+        long_about = "Describe the CLI as JSON: commands, arguments, and for every command the JSON \
+        Schema of what it prints, plus the exit codes and the error format.\n\n\
+        With no argument you get a compact index of every command (no output schemas). Name a command \
+        to get everything about it, including the schema of its output; naming a group such as `pr` \
+        lists its commands compactly. Use --full to include every output schema. This command always \
+        prints JSON.\n\n\
+        Examples:\n  bibu schema\n  bibu schema pr comment add\n  bibu schema --full pr"
+    )]
+    Schema {
+        /// Include the output schema of every command, not only of a single named one
+        #[arg(long)]
+        full: bool,
+        /// Command path to describe, e.g. `pr comment add`
+        path: Vec<String>,
+    },
     /// Show which repository bibu resolved (from --repo, BIBU_REPO or the git remote)
     Repo,
 }
@@ -212,7 +229,9 @@ pub enum PrCommand {
     },
     /// Change a pull request's title, description, destination, draft state or branch cleanup
     Edit {
+        /// Pull request number
         id: u64,
+        /// New title
         #[arg(long, short = 't')]
         title: Option<String>,
         /// New description; an empty string clears it
@@ -235,31 +254,49 @@ pub enum PrCommand {
         keep_source_branch: bool,
     },
     /// Print the pull request's unified diff (raw text unless --json)
-    Diff { id: u64 },
+    Diff {
+        /// Pull request number
+        id: u64,
+    },
     /// List the pull request's commits
     Commits {
+        /// Pull request number
         id: u64,
         #[command(flatten)]
         paging: Paging,
     },
     /// List the files changed by the pull request
     Files {
+        /// Pull request number
         id: u64,
         #[command(flatten)]
         paging: Paging,
     },
     /// Approve a pull request
-    Approve { id: u64 },
+    Approve {
+        /// Pull request number
+        id: u64,
+    },
     /// Withdraw your approval
     #[command(alias = "no-approve")]
-    Unapprove { id: u64 },
+    Unapprove {
+        /// Pull request number
+        id: u64,
+    },
     /// Request changes on a pull request
-    RequestChanges { id: u64 },
+    RequestChanges {
+        /// Pull request number
+        id: u64,
+    },
     /// Withdraw your change request
     #[command(alias = "no-request-changes")]
-    UnrequestChanges { id: u64 },
+    UnrequestChanges {
+        /// Pull request number
+        id: u64,
+    },
     /// Merge a pull request (asks for confirmation; --yes skips it)
     Merge {
+        /// Pull request number
         id: u64,
         /// Merge strategy [default: the repository's default]
         #[arg(long, value_enum)]
@@ -275,7 +312,10 @@ pub enum PrCommand {
         keep_source_branch: bool,
     },
     /// Decline a pull request (asks for confirmation; --yes skips it)
-    Decline { id: u64 },
+    Decline {
+        /// Pull request number
+        id: u64,
+    },
     /// Comments: general, inline on a file or line, replies, resolving
     Comment {
         #[command(subcommand)]
@@ -324,6 +364,7 @@ pub enum CommentCommand {
         bibu pr comment add 12 --file src/app.py --line 30 \"Why this default?\"\n  \
         echo \"long text\" | bibu pr comment add 12 --file src/app.py --line 30 --end-line 35")]
     Add {
+        /// Pull request number
         id: u64,
         /// Comment text (markdown); `-` or omitted reads stdin
         text: Option<String>,
@@ -342,6 +383,7 @@ pub enum CommentCommand {
     },
     /// Reply to a comment
     Reply {
+        /// Pull request number
         id: u64,
         /// Number of the comment to reply to
         comment_id: u64,
@@ -350,29 +392,50 @@ pub enum CommentCommand {
     },
     /// Change the text of one of your comments
     Edit {
+        /// Pull request number
         id: u64,
+        /// Comment number
         comment_id: u64,
         /// New text (markdown); `-` or omitted reads stdin
         text: Option<String>,
     },
     /// Delete one of your comments (asks for confirmation; --yes skips it)
-    Delete { id: u64, comment_id: u64 },
+    Delete {
+        /// Pull request number
+        id: u64,
+        /// Comment number
+        comment_id: u64,
+    },
     /// Mark a comment thread as resolved
-    Resolve { id: u64, comment_id: u64 },
+    Resolve {
+        /// Pull request number
+        id: u64,
+        /// Comment number
+        comment_id: u64,
+    },
     /// Reopen a resolved comment thread
-    Reopen { id: u64, comment_id: u64 },
+    Reopen {
+        /// Pull request number
+        id: u64,
+        /// Comment number
+        comment_id: u64,
+    },
 }
 
 #[derive(Debug, Subcommand)]
 pub enum ReviewersCommand {
     /// List reviewers and their review state
-    List { id: u64 },
+    List {
+        /// Pull request number
+        id: u64,
+    },
     /// Add reviewers, keeping the existing ones
     #[command(long_about = "Add reviewers, keeping the existing ones.\n\n\
         Each person is a name, nickname, account id, `{uuid}`, or `me`; names are looked up in the \
         workspace members and must match exactly one person. Bitbucket replaces the whole list on \
         update, so bibu reads the current reviewers first and sends the merged list.")]
     Add {
+        /// Pull request number
         id: u64,
         /// People to add
         #[arg(required = true)]
@@ -380,6 +443,7 @@ pub enum ReviewersCommand {
     },
     /// Remove reviewers, keeping the others
     Remove {
+        /// Pull request number
         id: u64,
         /// People to remove (name, nickname, account id or `{uuid}`)
         #[arg(required = true)]
@@ -391,6 +455,7 @@ pub enum ReviewersCommand {
 pub enum TaskCommand {
     /// List a pull request's tasks
     List {
+        /// Pull request number
         id: u64,
         /// Only tasks that are not resolved
         #[arg(long)]
@@ -400,6 +465,7 @@ pub enum TaskCommand {
     },
     /// Add a task, optionally attached to a comment
     Add {
+        /// Pull request number
         id: u64,
         /// Task text; `-` or omitted reads stdin
         text: Option<String>,
@@ -408,9 +474,19 @@ pub enum TaskCommand {
         comment: Option<u64>,
     },
     /// Mark a task resolved
-    Resolve { id: u64, task_id: u64 },
+    Resolve {
+        /// Pull request number
+        id: u64,
+        /// Task number
+        task_id: u64,
+    },
     /// Mark a resolved task unresolved again
-    Reopen { id: u64, task_id: u64 },
+    Reopen {
+        /// Pull request number
+        id: u64,
+        /// Task number
+        task_id: u64,
+    },
 }
 
 #[derive(Debug, Subcommand)]

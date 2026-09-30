@@ -71,14 +71,21 @@ rebuild of an unsigned dev binary pops a permission dialog (and hangs a non-inte
 
 ## Adding a command
 
-1. Declare it in `src/cli/mod.rs` (clap derive) with help text and examples.
+1. Declare it in `src/cli/mod.rs` (clap derive). **Every command and every argument needs a doc
+   comment**: a test fails otherwise, because the help text is the documentation.
 2. Add the typed endpoint call in `src/api/<resource>.rs` and any models in `src/api/models/`.
-3. Add the handler and its output type in `src/commands/`. Output types implement `Render`
-   (a table view) and `Serialize` (the JSON view).
-4. Wire it in `src/commands/mod.rs`.
+3. Add the handler and its output type in `src/commands/`. Output types implement `Render` (a table
+   view), `Serialize` and `schemars::JsonSchema` (the JSON view and its schema). **Every field needs a
+   doc comment**: it becomes the field's description in `bibu schema` and in the docs, and a test
+   fails if one is missing.
+4. Wire it in `src/commands/mod.rs` and register its output type in `src/schema/outputs.rs`. A test
+   fails if a runnable command has no registered output.
 5. Write unit tests for pure logic and end-to-end tests in `tests/` (shared helpers live in
    `tests/common/mod.rs`).
-6. Update the docs.
+6. Regenerate the reference docs: `UPDATE_DOCS=1 cargo test --test docs`, and commit the changes to
+   `docs/`. CI fails when they are stale.
+7. If agents should know about it, add an example to `skills/bibu/SKILL.md`. Every example there is
+   parsed against the real CLI by `cargo test --test skill`.
 
 ## Pull requests
 
