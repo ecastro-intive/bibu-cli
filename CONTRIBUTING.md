@@ -69,6 +69,29 @@ throwaway repo and never a real project. Pass credentials with `BIBU_EMAIL` and 
 instead of the keychain while developing: macOS ties Keychain access to the exact binary, so every
 rebuild of an unsigned dev binary pops a permission dialog (and hangs a non-interactive shell).
 
+## Live tests
+
+`tests/live.rs` runs bibu against a **real** Bitbucket repository. They are ignored by default and
+refuse to run without `BIBU_TEST_ALLOW_WRITES=1`, because they create (and afterwards remove)
+branches, pull requests, comments and tasks. Use a throwaway repository, never a real project.
+
+```sh
+BIBU_TEST_REPO=workspace/sandbox BIBU_TEST_EMAIL=you@company.com BIBU_TEST_TOKEN=... \
+BIBU_TEST_ALLOW_WRITES=1 \
+  cargo test --test live -- --ignored --test-threads=1
+```
+
+- `BIBU_TEST_REVIEWER` (name or uuid of another workspace member) enables the reviewer add/remove flow.
+- `BIBU_TEST_ALLOW_MERGE=1` also runs the merge flow, which adds one commit to the default branch.
+- Every JSON output is validated against the schema that `bibu schema` publishes for that command, so
+  the suite also proves the documented shapes are the real ones.
+- Cleanup runs even when an assertion fails. Commits are made through the REST API, so `git push`
+  access to the sandbox is not needed.
+- The pipeline test only reads existing runs (API commits do not start pipelines); it skips itself in
+  a repository that has none.
+- The `Live tests` workflow (Actions tab, run manually) does the same from CI once the
+  `BIBU_TEST_*` repository secrets are set.
+
 ## Adding a command
 
 1. Declare it in `src/cli/mod.rs` (clap derive). **Every command and every argument needs a doc
