@@ -93,6 +93,9 @@ Releases are built by GitHub Actions (`.github/workflows/release.yml`, generated
 [cargo-dist](https://opensource.axo.dev/cargo-dist/) from `dist-workspace.toml`). Nothing is published
 from a pull request: PRs only run `dist plan`, which also fails if the workflow is out of date.
 
+0. Optional but recommended: `./scripts/smoke-release.sh` builds two versions, installs the older with
+   the real installer against a fake local GitHub, and checks that `bibu upgrade` installs the newer.
+   It works in a temporary worktree and a throwaway `HOME` (macOS / Linux; needs `dist`).
 1. Raise `version` in `Cargo.toml` in a pull request (`chore: release 0.2.0`) and merge it.
 2. From an up-to-date `main`: `git tag v0.2.0 && git push origin v0.2.0`.
 3. The workflow builds the macOS and Windows archives, the two installers and checksums, and creates

@@ -61,6 +61,18 @@ pub enum Command {
         #[command(subcommand)]
         command: MemberCommand,
     },
+    /// Install the newest bibu release (only for copies installed with the official installer)
+    #[command(
+        long_about = "Install the newest bibu release from GitHub over this one.\n\n\
+        Works for copies installed with the official installer (see the README), which leaves a \
+        receipt saying where bibu came from. A copy built from source or installed another way is \
+        left alone and you are told how to get an upgradable one. Use --check to only look."
+    )]
+    Upgrade {
+        /// Only report whether a newer release exists; install nothing
+        #[arg(long)]
+        check: bool,
+    },
     /// Describe every command, argument and output as JSON (for agents and tools)
     #[command(
         long_about = "Describe the CLI as JSON: commands, arguments, and for every command the JSON \

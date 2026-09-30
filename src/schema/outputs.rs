@@ -18,6 +18,7 @@ use crate::commands::pr::{
 };
 use crate::commands::reviewers::ReviewerList;
 use crate::commands::task::{TaskList, TaskRow};
+use crate::commands::upgrade::UpgradeResult;
 use crate::repo::RepoRef;
 
 /// What a command prints on stdout.
@@ -119,6 +120,9 @@ pub fn for_path(path: &[&str]) -> Option<OutputInfo> {
         ["branch", "create"] => json_out::<BranchRow>("the new branch"),
         ["branch", "delete"] => json_out::<BranchAction>("the branch and what happened"),
         ["member", "list" | "find"] => json_out::<MemberList>("array of workspace members"),
+        ["upgrade"] => json_out::<UpgradeResult>(
+            "the running and latest versions, and whether bibu was upgraded",
+        ),
         ["schema"] => schema_command_output(),
         _ => return None,
     })

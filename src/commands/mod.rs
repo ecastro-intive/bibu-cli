@@ -8,6 +8,7 @@ pub mod pipeline;
 pub mod pr;
 pub mod reviewers;
 pub mod task;
+pub mod upgrade;
 
 use crate::cli::{AuthCommand, Cli, Command};
 use crate::context::Context;
@@ -36,6 +37,7 @@ pub fn dispatch(cli: &Cli, ctx: &Context, term: &dyn Terminal, mode: Mode) -> Re
             };
             member::run(command, &workspace, &ctx.client()?, mode)
         }
+        Command::Upgrade { check } => upgrade::run(*check, mode),
         Command::Schema { full, path } => crate::schema::run(path, *full, mode == Mode::Table),
         Command::Repo => Ok(render(&repo::resolve(cli.repo.as_deref())?, mode)),
         Command::Auth { command } => match command {
