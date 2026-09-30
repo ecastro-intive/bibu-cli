@@ -43,6 +43,14 @@ pub enum Command {
         #[command(subcommand)]
         command: PrCommand,
     },
+    /// Workspace members (used to find people for reviewers)
+    Member {
+        /// Workspace slug [default: the workspace of the resolved repository]
+        #[arg(long, global = true)]
+        workspace: Option<String>,
+        #[command(subcommand)]
+        command: MemberCommand,
+    },
     /// Show which repository bibu resolved (from --repo, BIBU_REPO or the git remote)
     Repo,
 }
@@ -258,4 +266,153 @@ pub enum PrCommand {
     },
     /// Decline a pull request (asks for confirmation; --yes skips it)
     Decline { id: u64 },
+    /// Comments: general, inline on a file or line, replies, resolving
+    Comment {
+        #[command(subcommand)]
+        command: CommentCommand,
+    },
+    /// Reviewers: list, add, remove
+    Reviewers {
+        #[command(subcommand)]
+        command: ReviewersCommand,
+    },
+    /// Tasks attached to a pull request
+    Task {
+        #[command(subcommand)]
+        command: TaskCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CommentCommand {
+    /// List comments as threads, oldest first (deleted ones are hidden)
+    List {
+        /// Pull request number
+        id: u64,
+        /// Only threads whose first comment is not resolved
+        #[arg(long)]
+        unresolved: bool,
+        /// Only inline comments (anchored to a file)
+        #[arg(long)]
+        inline: bool,
+        /// Only threads anchored to this file path (implies --inline)
+        #[arg(long)]
+        file: Option<String>,
+        /// Also show deleted comments
+        #[arg(long)]
+        include_deleted: bool,
+        #[command(flatten)]
+        paging: Paging,
+    },
+    /// Add a comment: general, on a file, or on a line or line range
+    #[command(long_about = "Add a comment to a pull request.\n\n\
+        Without --file the comment is general. With --file it is attached to that file; add --line \
+        to attach it to a line of the new version, --end-line for a range, and --old-side to \
+        anchor to the old version (for removed lines). The text is the last argument; pass - or \
+        omit it to read the text from stdin.\n\n\
+        Examples:\n  bibu pr comment add 12 \"Looks good overall\"\n  \
+        bibu pr comment add 12 --file src/app.py --line 30 \"Why this default?\"\n  \
+        echo \"long text\" | bibu pr comment add 12 --file src/app.py --line 30 --end-line 35")]
+    Add {
+        id: u64,
+        /// Comment text (markdown); `-` or omitted reads stdin
+        text: Option<String>,
+        /// File path, relative to the repository root
+        #[arg(long, short = 'f')]
+        file: Option<String>,
+        /// Line number (requires --file)
+        #[arg(long, short = 'l', requires = "file", value_parser = clap::value_parser!(u64).range(1..))]
+        line: Option<u64>,
+        /// Last line of a range that starts at --line
+        #[arg(long, requires = "line", value_parser = clap::value_parser!(u64).range(1..))]
+        end_line: Option<u64>,
+        /// Anchor to the old version of the file instead of the new one
+        #[arg(long, requires = "line")]
+        old_side: bool,
+    },
+    /// Reply to a comment
+    Reply {
+        id: u64,
+        /// Number of the comment to reply to
+        comment_id: u64,
+        /// Reply text (markdown); `-` or omitted reads stdin
+        text: Option<String>,
+    },
+    /// Change the text of one of your comments
+    Edit {
+        id: u64,
+        comment_id: u64,
+        /// New text (markdown); `-` or omitted reads stdin
+        text: Option<String>,
+    },
+    /// Delete one of your comments (asks for confirmation; --yes skips it)
+    Delete { id: u64, comment_id: u64 },
+    /// Mark a comment thread as resolved
+    Resolve { id: u64, comment_id: u64 },
+    /// Reopen a resolved comment thread
+    Reopen { id: u64, comment_id: u64 },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ReviewersCommand {
+    /// List reviewers and their review state
+    List { id: u64 },
+    /// Add reviewers, keeping the existing ones
+    #[command(long_about = "Add reviewers, keeping the existing ones.\n\n\
+        Each person is a name, nickname, account id, `{uuid}`, or `me`; names are looked up in the \
+        workspace members and must match exactly one person. Bitbucket replaces the whole list on \
+        update, so bibu reads the current reviewers first and sends the merged list.")]
+    Add {
+        id: u64,
+        /// People to add
+        #[arg(required = true)]
+        users: Vec<String>,
+    },
+    /// Remove reviewers, keeping the others
+    Remove {
+        id: u64,
+        /// People to remove (name, nickname, account id or `{uuid}`)
+        #[arg(required = true)]
+        users: Vec<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TaskCommand {
+    /// List a pull request's tasks
+    List {
+        id: u64,
+        /// Only tasks that are not resolved
+        #[arg(long)]
+        unresolved: bool,
+        #[command(flatten)]
+        paging: Paging,
+    },
+    /// Add a task, optionally attached to a comment
+    Add {
+        id: u64,
+        /// Task text; `-` or omitted reads stdin
+        text: Option<String>,
+        /// Attach the task to this comment
+        #[arg(long)]
+        comment: Option<u64>,
+    },
+    /// Mark a task resolved
+    Resolve { id: u64, task_id: u64 },
+    /// Mark a resolved task unresolved again
+    Reopen { id: u64, task_id: u64 },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MemberCommand {
+    /// List workspace members
+    List {
+        #[command(flatten)]
+        paging: Paging,
+    },
+    /// Find members by name, nickname, account id or uuid
+    Find {
+        /// Text to look for (case-insensitive)
+        query: String,
+    },
 }

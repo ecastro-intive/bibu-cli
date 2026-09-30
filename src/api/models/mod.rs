@@ -2,7 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod comment;
 pub mod pullrequest;
+pub mod task;
 
 /// A Bitbucket user, as returned by `GET /user`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -15,4 +17,11 @@ pub struct Account {
     pub nickname: Option<String>,
     #[serde(default)]
     pub account_id: Option<String>,
+}
+
+/// An entry of `GET /workspaces/{workspace}/members`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WorkspaceMember {
+    #[serde(default)]
+    pub user: Account,
 }
