@@ -699,6 +699,35 @@ fn reviewers_add_ambiguous_or_unknown_names_send_nothing() {
 }
 
 #[test]
+fn an_empty_name_is_refused_everywhere_people_are_looked_up_and_nothing_is_sent() {
+    for args in [
+        vec!["pr", "reviewers", "add", "12", ""],
+        vec!["pr", "reviewers", "add", "12", "   "],
+        vec!["pr", "reviewers", "remove", "12", ""],
+        vec!["member", "find", ""],
+    ] {
+        let mut env = Env::new();
+        env.server
+            .mock("GET", Matcher::Any)
+            .match_query(Matcher::Any)
+            .with_body(pr_with_reviewers(&[("Bob Ray", "{b}")]).to_string())
+            .create();
+        let never = env.server.mock("PUT", Matcher::Any).expect(0).create();
+
+        let out = env.bibu().args(&args).output().unwrap();
+
+        assert_eq!(
+            out.status.code(),
+            Some(2),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(out.stdout.is_empty(), "{args:?}");
+        never.assert();
+    }
+}
+
+#[test]
 fn reviewers_add_the_author_is_reported_as_a_conflict() {
     let mut env = Env::new();
     env.mock("GET", PR)
