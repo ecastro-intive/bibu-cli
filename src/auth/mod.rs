@@ -3,6 +3,8 @@
 //! Credential precedence: `BIBU_EMAIL` + `BIBU_TOKEN` env vars, then the stored login
 //! (OS keychain, or the file named by `BIBU_CREDENTIALS_FILE`).
 
+#[cfg(target_os = "macos")]
+pub mod macos;
 pub mod store;
 
 use std::fmt;

@@ -28,7 +28,7 @@ thiserror = "2"
 url = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-keyring = { version = "3.6", default-features = false, features = ["apple-native"] }
+base64 = "0.22"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3.6", default-features = false, features = ["windows-native"] }

@@ -65,9 +65,9 @@ Pull request titles use the same format.
 ## Testing against real Bitbucket
 
 Mocked tests are the safety net, but check new endpoints against a real repository too. Use a
-throwaway repo and never a real project. Pass credentials with `BIBU_EMAIL` and `BIBU_TOKEN`
-instead of the keychain while developing: macOS ties Keychain access to the exact binary, so every
-rebuild of an unsigned dev binary pops a permission dialog (and hangs a non-interactive shell).
+throwaway repo and never a real project. You can pass credentials with `BIBU_EMAIL` and `BIBU_TOKEN`
+instead of the keychain. On macOS the keychain code talks to the real Keychain only in one ignored
+test (`cargo test real_keychain -- --ignored`); everything else uses a stub `security` program.
 
 ## Adding a command
 
