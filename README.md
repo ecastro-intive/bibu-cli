@@ -2,7 +2,7 @@
 
 A Bitbucket Cloud CLI for humans and AI agents, written in Rust. Successor to bb-cli.
 
-**Status:** under construction (milestone 3 of 7). Available so far: `bibu auth`, `bibu pr` (core commands) and `bibu repo`.
+**Status:** under construction (milestone 4 of 7). Available so far: `bibu auth`, `bibu pr` (core, comments, reviewers, tasks), `bibu member` and `bibu repo`.
 
 ## Output contract
 
@@ -27,6 +27,9 @@ bibu auth logout                     # removes the stored login
 
 `login` checks the pair against `GET /user` and stores nothing unless Bitbucket accepts it.
 Credentials are kept in the OS keychain (macOS Keychain / Windows Credential Manager).
+On macOS the Keychain ties access to the exact binary, so after a rebuild or an unsigned upgrade it
+may ask once whether `bibu` can use the stored item (choose *Always Allow*). Scripts and agents should
+use `BIBU_EMAIL` and `BIBU_TOKEN`, which never touch the Keychain.
 
 | Variable | Purpose |
 |---|---|
@@ -62,10 +65,58 @@ one pull request with `description`, `close_source_branch`, `merge_commit`, `par
 `create` returns `{"pull_requests": [...]}`; `approve` and friends return
 `{"pull_request": ID, "action": "approved" | "approval_removed" | "changes_requested" | "change_request_removed"}`.
 
-Token scopes: read commands need pull request read access (`read:pullrequest:bitbucket`) and
-write commands need `write:pullrequest:bitbucket`. `diff` and `files` follow a redirect to the
-repository diff, which may also need `read:repository:bitbucket`. If a scope is missing the error
-(exit 4) lists what Bitbucket says is required; treat that message as the source of truth.
+Token scopes (from Bitbucket's OpenAPI spec): read commands need `read:pullrequest:bitbucket`, write
+commands `write:pullrequest:bitbucket`, and `diff` / `files` also `read:repository:bitbucket` (they
+follow a redirect to the repository diff). `bibu auth` needs `read:user:bitbucket`, and the `member`
+commands plus name lookup in `pr reviewers add` need `read:workspace:bitbucket`. If a scope is missing
+the error (exit 4) lists what Bitbucket says is required; treat that message as the source of truth.
+
+### Comments
+
+```sh
+bibu pr comment list 12 [--unresolved] [--inline] [--file src/app.py] [--include-deleted] [--limit N | --all]
+bibu pr comment add 12 "Looks good"                                    # general comment
+bibu pr comment add 12 --file src/app.py "About this file"             # whole-file comment
+bibu pr comment add 12 --file src/app.py --line 30 "Why this default?" # one line of the new version
+bibu pr comment add 12 -f src/app.py -l 30 --end-line 35 "..."          # a range
+bibu pr comment add 12 --file src/app.py --line 2 --old-side "..."     # a removed line (old version)
+echo "long text" | bibu pr comment add 12 --file src/app.py --line 30  # text from stdin (or pass -)
+bibu pr comment reply 12 COMMENT_ID "Agreed"
+bibu pr comment edit 12 COMMENT_ID "New text"
+bibu pr comment delete 12 COMMENT_ID            # asks; needs --yes without a terminal
+bibu pr comment resolve 12 COMMENT_ID           # and: reopen
+```
+
+`list` shows threads oldest first, with replies indented under their parent. Deleted comments are
+hidden unless `--include-deleted`. `--unresolved`, `--inline` and `--file` work on whole threads: a
+reply is kept or dropped together with the comment that started its thread. JSON rows have `id`,
+`parent_id`, `author`, `content`, `inline` (`path`, `line`, `end_line`, `side` = `new` | `old` | `file`),
+`resolved`, `resolved_by`, `deleted`, `pending` and `url`. Resolving an already resolved thread is
+exit 6, reopening one that is open is exit 5. Bitbucket accepts comments on any line, including lines
+outside the diff.
+
+### Reviewers
+
+```sh
+bibu pr reviewers list 12
+bibu pr reviewers add 12 "Jane Doe" bob '{uuid}' me
+bibu pr reviewers remove 12 bob
+```
+
+People are matched by uuid, account id, nickname or name (exact match first, then partial); `me` is
+you. An ambiguous name is refused (exit 2) with the candidates listed; the author cannot review their
+own PR (exit 6, from Bitbucket). Bitbucket replaces the whole reviewer list on update, so `add` and
+`remove` read the current list first and send the merged one.
+
+### Tasks and members
+
+```sh
+bibu pr task list 12 [--unresolved]
+bibu pr task add 12 "Rename the argument" [--comment COMMENT_ID]
+bibu pr task resolve 12 TASK_ID                 # and: reopen
+bibu member list [--workspace SLUG]
+bibu member find jane
+```
 
 ## Repository resolution
 

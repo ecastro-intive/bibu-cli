@@ -15,6 +15,8 @@ use crate::output::{render, Mode, Render};
 use crate::repo;
 use crate::terminal::Terminal;
 
+use super::confirm;
+
 // ---------------------------------------------------------------- output types
 
 #[derive(Debug, Serialize)]
@@ -38,7 +40,7 @@ impl From<&Participant> for ReviewerState {
 }
 
 impl ReviewerState {
-    fn label(&self) -> &str {
+    pub(crate) fn label(&self) -> &str {
         match self.state.as_deref() {
             Some("approved") => "approved",
             Some("changes_requested") => "changes requested",
@@ -477,29 +479,6 @@ fn default_title(source: &str, destination: &str) -> String {
 
 // -------------------------------------------------------------------- handlers
 
-/// Asks before a destructive action. `--yes` skips it; with no terminal and no `--yes` the
-/// action is refused, so a script can never merge by accident.
-fn confirm(
-    term: &dyn Terminal,
-    yes: bool,
-    verb: &str,
-    question: impl FnOnce() -> Result<String>,
-) -> Result<()> {
-    if yes {
-        return Ok(());
-    }
-    if !term.is_interactive() {
-        return Err(BibuError::Usage(format!(
-            "refusing to {verb} without confirmation; pass --yes (no terminal to ask on)"
-        )));
-    }
-    if term.confirm(&question()?)? {
-        Ok(())
-    } else {
-        Err(BibuError::Other(format!("aborted: did not {verb}")))
-    }
-}
-
 fn describe(pr: &PullRequest) -> String {
     format!(
         "#{} \"{}\" ({} -> {})",
@@ -716,6 +695,11 @@ pub fn run(
             let pr = api::merge(&client, &repo, *id, &body)?;
             Ok(render(&PrDetail::new(&pr), mode))
         }
+        PrCommand::Comment { command } => {
+            super::comment::run(command, &repo, &client, term, yes, mode)
+        }
+        PrCommand::Reviewers { command } => super::reviewers::run(command, &repo, &client, mode),
+        PrCommand::Task { command } => super::task::run(command, &repo, &client, term, mode),
         PrCommand::Decline { id } => {
             confirm(term, yes, "decline", || {
                 Ok(format!(

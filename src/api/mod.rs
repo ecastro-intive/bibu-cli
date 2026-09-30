@@ -1,9 +1,12 @@
 //! Bitbucket Cloud REST API access.
 
 pub mod client;
+pub mod comments;
+pub mod members;
 pub mod models;
 pub mod paginate;
 pub mod pullrequests;
+pub mod tasks;
 pub mod user;
 
 pub use client::Client;

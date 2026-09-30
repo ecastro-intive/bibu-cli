@@ -62,6 +62,13 @@ Pull request titles use the same format.
 - **Output contract.** Results on stdout, errors on stderr, stable exit codes, JSON when piped.
   Never print the API token.
 
+## Testing against real Bitbucket
+
+Mocked tests are the safety net, but check new endpoints against a real repository too. Use a
+throwaway repo and never a real project. Pass credentials with `BIBU_EMAIL` and `BIBU_TOKEN`
+instead of the keychain while developing: macOS ties Keychain access to the exact binary, so every
+rebuild of an unsigned dev binary pops a permission dialog (and hangs a non-interactive shell).
+
 ## Adding a command
 
 1. Declare it in `src/cli/mod.rs` (clap derive) with help text and examples.
@@ -69,7 +76,8 @@ Pull request titles use the same format.
 3. Add the handler and its output type in `src/commands/`. Output types implement `Render`
    (a table view) and `Serialize` (the JSON view).
 4. Wire it in `src/commands/mod.rs`.
-5. Write unit tests for pure logic and end-to-end tests in `tests/`.
+5. Write unit tests for pure logic and end-to-end tests in `tests/` (shared helpers live in
+   `tests/common/mod.rs`).
 6. Update the docs.
 
 ## Pull requests

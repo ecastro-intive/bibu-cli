@@ -3,69 +3,11 @@
 //! Each mock asserts the exact method, path, query, JSON body and `Authorization` header the
 //! CLI sends, and `assert()` proves it was called the expected number of times.
 
-use assert_cmd::Command;
-use base64::Engine;
-use mockito::{Matcher, Mock, ServerGuard};
+mod common;
+
+use common::*;
+use mockito::{Matcher, Mock};
 use serde_json::{json, Value};
-use tempfile::TempDir;
-
-const REPO: &str = "/repositories/acme/api";
-
-struct Env {
-    server: ServerGuard,
-    dir: TempDir,
-}
-
-impl Env {
-    fn new() -> Self {
-        Self {
-            server: mockito::Server::new(),
-            dir: tempfile::tempdir().unwrap(),
-        }
-    }
-
-    fn bibu(&self) -> Command {
-        let mut cmd = Command::cargo_bin("bibu").unwrap();
-        cmd.env("BIBU_EMAIL", "me@x.io")
-            .env("BIBU_TOKEN", "tok")
-            .env("BIBU_REPO", "acme/api")
-            .env("BIBU_API_BASE", self.server.url())
-            .env("BIBU_CREDENTIALS_FILE", self.dir.path().join("creds.json"))
-            .current_dir(self.dir.path());
-        cmd
-    }
-
-    /// A mock that only matches requests carrying the expected credentials.
-    fn mock(&mut self, method: &str, path: &str) -> Mock {
-        let header = format!(
-            "Basic {}",
-            base64::engine::general_purpose::STANDARD.encode("me@x.io:tok")
-        );
-        self.server
-            .mock(method, path)
-            .match_header("authorization", header.as_str())
-            .expect(1)
-    }
-
-    fn json(&mut self, method: &str, path: &str, body: Value) -> Mock {
-        self.mock(method, path)
-            .with_header("content-type", "application/json")
-            .with_body(body.to_string())
-            .create()
-    }
-
-    fn me(&mut self) -> Mock {
-        self.json(
-            "GET",
-            "/user",
-            json!({"display_name": "Me Myself", "uuid": "{me}", "nickname": "me"}),
-        )
-    }
-}
-
-fn account(name: &str, uuid: &str) -> Value {
-    json!({"display_name": name, "uuid": uuid, "nickname": name.to_lowercase().replace(' ', "")})
-}
 
 fn pr_json(id: u64, title: &str, src: &str, dst: &str, author: Value) -> Value {
     json!({
@@ -77,37 +19,6 @@ fn pr_json(id: u64, title: &str, src: &str, dst: &str, author: Value) -> Value {
         "created_on": "2026-09-01T10:00:00+00:00", "updated_on": "2026-09-02T11:00:00+00:00",
         "links": {"html": {"href": format!("https://bitbucket.org/acme/api/pull-requests/{id}")}},
     })
-}
-
-fn page(values: Vec<Value>) -> Value {
-    json!({"values": values})
-}
-
-fn stdout_json(out: &std::process::Output) -> Value {
-    serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
-        panic!(
-            "stdout is not JSON ({e}): {:?}",
-            String::from_utf8_lossy(&out.stdout)
-        )
-    })
-}
-
-fn stderr_json(out: &std::process::Output) -> Value {
-    serde_json::from_slice(&out.stderr).unwrap_or_else(|e| {
-        panic!(
-            "stderr is not JSON ({e}): {:?}",
-            String::from_utf8_lossy(&out.stderr)
-        )
-    })
-}
-
-fn query(pairs: &[(&str, &str)]) -> Matcher {
-    Matcher::AllOf(
-        pairs
-            .iter()
-            .map(|(k, v)| Matcher::UrlEncoded((*k).into(), (*v).into()))
-            .collect(),
-    )
 }
 
 // ------------------------------------------------------------------------ list
