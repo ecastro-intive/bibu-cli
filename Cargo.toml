@@ -1,0 +1,46 @@
+[package]
+name = "bibu"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Bitbucket Cloud CLI for humans and AI agents"
+license = "MIT"
+publish = false
+
+[lib]
+name = "bibu"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bibu"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive", "env"] }
+comfy-table = "7"
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
+rpassword = "7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+url = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["apple-native"] }
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["windows-native"] }
+
+[dev-dependencies]
+assert_cmd = "2"
+base64 = "0.22"
+mockito = "1"
+predicates = "3"
+serde_json = "1"
+tempfile = "3"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
