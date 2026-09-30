@@ -115,7 +115,7 @@ fn write_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     fs::write(path, bytes)
 }
 
-#[cfg(any(target_os = "macos", windows))]
+#[cfg(windows)]
 mod keychain {
     use super::*;
 
@@ -221,7 +221,11 @@ pub fn default_store() -> Result<Box<dyn CredentialStore>> {
     if let Some(path) = std::env::var_os("BIBU_CREDENTIALS_FILE").filter(|p| !p.is_empty()) {
         return Ok(Box::new(FileStore::new(PathBuf::from(path))));
     }
-    #[cfg(any(target_os = "macos", windows))]
+    #[cfg(target_os = "macos")]
+    {
+        Ok(Box::new(super::macos::SecurityToolStore::new()))
+    }
+    #[cfg(windows)]
     {
         Ok(Box::new(keychain::KeychainStore::new()?))
     }

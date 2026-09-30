@@ -50,9 +50,15 @@ bibu auth logout                     # removes the stored login
 
 `login` checks the pair against `GET /user` and stores nothing unless Bitbucket accepts it.
 Credentials are kept in the OS keychain (macOS Keychain / Windows Credential Manager).
-On macOS the Keychain ties access to the exact binary, so after a rebuild or an unsigned upgrade it
-may ask once whether `bibu` can use the stored item (choose *Always Allow*). Scripts and agents should
-use `BIBU_EMAIL` and `BIBU_TOKEN`, which never touch the Keychain.
+On macOS bibu reads and writes the Keychain through Apple's own `security` tool, so macOS does not
+ask again after an upgrade (bibu releases are not code-signed, and macOS would otherwise treat every
+new build as a stranger). The token goes to `security` on stdin, never on a command line. One
+consequence: other programs you run can read the item the same way, so on a shared or untrusted
+machine prefer `BIBU_EMAIL` and `BIBU_TOKEN`, which never touch the Keychain.
+
+Upgrading from a build that stored the login under the old Keychain name? Run `bibu auth login`
+once more. The old entry is ignored; remove it with `security delete-generic-password -s bibu -a default`
+(macOS will ask for permission once).
 
 | Variable | Purpose |
 |---|---|
