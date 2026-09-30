@@ -218,3 +218,7 @@ cargo test
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for branch and commit rules and how to add a command.
+
+## License
+
+MIT, Copyright (c) 2026 Intive. See [LICENSE](LICENSE).
