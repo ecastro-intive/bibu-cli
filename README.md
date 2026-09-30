@@ -2,7 +2,7 @@
 
 A Bitbucket Cloud CLI for humans and AI agents, written in Rust. Successor to bb-cli.
 
-**Status:** under construction (milestone 4 of 7). Available so far: `bibu auth`, `bibu pr` (core, comments, reviewers, tasks), `bibu member` and `bibu repo`.
+**Status:** under construction (milestone 5 of 7). Available so far: `bibu auth`, `bibu pr` (core, comments, reviewers, tasks), `bibu pipeline`, `bibu branch`, `bibu member` and `bibu repo`.
 
 ## Output contract
 
@@ -67,7 +67,8 @@ one pull request with `description`, `close_source_branch`, `merge_commit`, `par
 
 Token scopes (from Bitbucket's OpenAPI spec): read commands need `read:pullrequest:bitbucket`, write
 commands `write:pullrequest:bitbucket`, and `diff` / `files` also `read:repository:bitbucket` (they
-follow a redirect to the repository diff). `bibu auth` needs `read:user:bitbucket`, and the `member`
+follow a redirect to the repository diff). `bibu pipeline` needs `read:pipeline:bitbucket`, `bibu branch` needs `read:repository:bitbucket`
+(`write:repository:bitbucket` to create or delete), `bibu auth` needs `read:user:bitbucket`, and the `member`
 commands plus name lookup in `pr reviewers add` need `read:workspace:bitbucket`. If a scope is missing
 the error (exit 4) lists what Bitbucket says is required; treat that message as the source of truth.
 
@@ -107,6 +108,34 @@ People are matched by uuid, account id, nickname or name (exact match first, the
 you. An ambiguous name is refused (exit 2) with the candidates listed; the author cannot review their
 own PR (exit 6, from Bitbucket). Bitbucket replaces the whole reviewer list on update, so `add` and
 `remove` read the current list first and send the merged one.
+
+### Pipelines
+
+```sh
+bibu pipeline list [--branch main] [--status failed] [--limit N | --all]   # newest first
+bibu pipeline view 42                # run + steps; 42 is the build number shown in Bitbucket (or a uuid)
+bibu pipeline logs 42                # every step's log under a "==> name (status) <==" header
+bibu pipeline logs 42 --step test    # one step: its name, 1-based number, or uuid
+bibu pipeline logs 42 --json         # {"pipeline", "steps": [{"name", "status", "log"}]}
+```
+
+Statuses are one lowercase word: `pending`, `parsing`, `running`, `paused`, `halted`, `successful`,
+`failed`, `stopped`, `error` (finished runs report their result, running ones their stage).
+`logs` prints raw text even when piped, so `bibu pipeline logs 42 | grep -i error` works; a step that
+has not started has no log yet and is reported as such instead of failing. Pipelines must be enabled
+in the repository settings, and runs are started by pushing, not by bibu.
+
+### Branches
+
+```sh
+bibu branch list [--name feature] [--limit N | --all]   # most recently updated first, default marked
+bibu branch create feature/login                        # from the default branch
+bibu branch create hotfix --from release/1.2            # from a branch, or a commit hash
+bibu branch delete feature/login                        # asks; needs --yes without a terminal
+```
+
+`delete` refuses the repository's default branch even with `--yes` (exit 6). Branch names may contain
+`/`, `#` and other characters; bibu encodes them for you.
 
 ### Tasks and members
 
