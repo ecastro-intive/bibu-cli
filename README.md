@@ -4,6 +4,30 @@ A Bitbucket Cloud CLI for humans and AI agents, written in Rust. Successor to bb
 
 **Status:** under construction (milestone 6 of 7). Available so far: `bibu auth`, `bibu pr` (core, comments, reviewers, tasks), `bibu pipeline`, `bibu branch`, `bibu member` and `bibu repo`.
 
+## Install
+
+Releases are published on GitHub for macOS (Apple Silicon and Intel) and Windows (x64).
+
+```sh
+# macOS
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ecastro-intive/bibu-cli/releases/latest/download/bibu-installer.sh | sh
+```
+
+```powershell
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/ecastro-intive/bibu-cli/releases/latest/download/bibu-installer.ps1 | iex"
+```
+
+The installer puts `bibu` in `~/.local/bin` (make sure that is on your `PATH`), verifies the download
+checksum, and records how bibu was installed so it can be upgraded later. Check with `bibu --version`.
+To upgrade, run the same command again.
+
+The binaries are **not code-signed**. The installers download with `curl` / PowerShell, which macOS
+does not flag. If you download an archive with a browser instead, macOS may refuse to open it; clear
+the flag with `xattr -d com.apple.quarantine bibu`.
+
+From source (needs Rust 1.85 or newer): `cargo install --git https://github.com/ecastro-intive/bibu-cli`.
+
 ## For people and for agents
 
 - **Reference:** every command, argument and output field is documented in
