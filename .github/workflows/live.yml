@@ -1,0 +1,41 @@
+name: Live tests
+
+# Runs bibu against a real Bitbucket sandbox repository. Manual only: it never runs on its own.
+# Needs these repository secrets (Settings > Secrets and variables > Actions):
+#   BIBU_TEST_REPO      workspace/slug of a THROWAWAY repository
+#   BIBU_TEST_EMAIL     Atlassian email of the account that owns the token
+#   BIBU_TEST_TOKEN     API token with pull request, repository, pipeline and workspace scopes
+#   BIBU_TEST_REVIEWER  (optional) name or uuid of another workspace member
+on:
+  workflow_dispatch:
+    inputs:
+      merge:
+        description: "Also run the merge flow (adds a commit to the sandbox's default branch)"
+        type: boolean
+        default: false
+
+# Two runs at once would step on each other's branches in the same repository.
+concurrency:
+  group: live-tests
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  live:
+    name: Live tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run the live suite
+        env:
+          BIBU_TEST_REPO: ${{ secrets.BIBU_TEST_REPO }}
+          BIBU_TEST_EMAIL: ${{ secrets.BIBU_TEST_EMAIL }}
+          BIBU_TEST_TOKEN: ${{ secrets.BIBU_TEST_TOKEN }}
+          BIBU_TEST_REVIEWER: ${{ secrets.BIBU_TEST_REVIEWER }}
+          BIBU_TEST_ALLOW_WRITES: "1"
+          BIBU_TEST_ALLOW_MERGE: ${{ inputs.merge && '1' || '0' }}
+        run: cargo test --locked --test live -- --ignored --test-threads=1 --nocapture
