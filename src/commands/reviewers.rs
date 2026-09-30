@@ -3,6 +3,7 @@
 //! Bitbucket only changes reviewers through a full-list `PUT` of the pull request, so `add` and
 //! `remove` read the current list, compute the new one, and write it back.
 
+use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::json;
 
@@ -15,9 +16,11 @@ use crate::error::Result;
 use crate::output::{render, Mode, Render};
 use crate::repo::RepoRef;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct ReviewerList {
+    /// Pull request number.
     pub pull_request: u64,
+    /// Current reviewers and their review state.
     pub reviewers: Vec<ReviewerState>,
 }
 

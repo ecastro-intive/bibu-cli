@@ -5,6 +5,7 @@
 use std::fmt;
 use std::process::Command;
 
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::error::{BibuError, Result};
@@ -12,9 +13,11 @@ use crate::output::Render;
 
 const BITBUCKET_HOSTS: [&str; 2] = ["bitbucket.org", "www.bitbucket.org"];
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct RepoRef {
+    /// Workspace slug.
     pub workspace: String,
+    /// Repository slug.
     pub slug: String,
 }
 

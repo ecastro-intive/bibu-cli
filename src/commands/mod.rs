@@ -36,6 +36,7 @@ pub fn dispatch(cli: &Cli, ctx: &Context, term: &dyn Terminal, mode: Mode) -> Re
             };
             member::run(command, &workspace, &ctx.client()?, mode)
         }
+        Command::Schema { full, path } => crate::schema::run(path, *full, mode == Mode::Table),
         Command::Repo => Ok(render(&repo::resolve(cli.repo.as_deref())?, mode)),
         Command::Auth { command } => match command {
             AuthCommand::Login { email, with_token } => Ok(render(

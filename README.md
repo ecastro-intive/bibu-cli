@@ -2,7 +2,30 @@
 
 A Bitbucket Cloud CLI for humans and AI agents, written in Rust. Successor to bb-cli.
 
-**Status:** under construction (milestone 5 of 7). Available so far: `bibu auth`, `bibu pr` (core, comments, reviewers, tasks), `bibu pipeline`, `bibu branch`, `bibu member` and `bibu repo`.
+**Status:** under construction (milestone 6 of 7). Available so far: `bibu auth`, `bibu pr` (core, comments, reviewers, tasks), `bibu pipeline`, `bibu branch`, `bibu member` and `bibu repo`.
+
+## For people and for agents
+
+- **Reference:** every command, argument and output field is documented in
+  [docs/commands.md](docs/commands.md); output modes, errors and exit codes are in
+  [docs/json-output.md](docs/json-output.md). Both are generated from the CLI definition and checked
+  in CI, so they cannot go stale.
+- **Machine-readable:** `bibu schema` prints the command tree as JSON; `bibu schema pr comment add`
+  adds that command's arguments and the JSON Schema of its output. `bibu schema --full` includes every
+  output schema.
+- **Claude skill:** [skills/bibu/SKILL.md](skills/bibu/SKILL.md) teaches Claude Code how to use bibu
+  safely (always `--json`, decide on exit codes, only merge or delete when asked, typical review and
+  pipeline workflows). Every command example in it is tested against the real CLI. Install it once:
+
+```sh
+mkdir -p ~/.claude/skills && cp -R skills/bibu ~/.claude/skills/        # macOS / Linux
+```
+
+```powershell
+Copy-Item -Recurse skills\bibu $HOME\.claude\skills\                   # Windows (PowerShell)
+```
+
+  Agents and scripts should authenticate with `BIBU_EMAIL` and `BIBU_TOKEN` instead of the keychain.
 
 ## Output contract
 

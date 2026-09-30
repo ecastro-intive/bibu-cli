@@ -2,6 +2,7 @@
 
 use comfy_table::presets::NOTHING;
 use comfy_table::Table;
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::api::models::Account;
@@ -10,7 +11,7 @@ use crate::cli::MemberCommand;
 use crate::error::{BibuError, Result};
 use crate::output::{render, Mode, Render};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 #[serde(transparent)]
 pub struct MemberList(pub Vec<Account>);
 

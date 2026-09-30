@@ -2,6 +2,7 @@
 
 use comfy_table::presets::NOTHING;
 use comfy_table::Table;
+use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
@@ -19,10 +20,13 @@ use super::confirm;
 
 // ---------------------------------------------------------------- output types
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct ReviewerState {
+    /// The person.
     pub user: Account,
+    /// `REVIEWER`, or `PARTICIPANT` for someone who only commented or approved.
     pub role: String,
+    /// Whether they approved.
     pub approved: bool,
     /// `approved`, `changes_requested`, or null while pending / commented only.
     pub state: Option<String>,
@@ -51,19 +55,31 @@ impl ReviewerState {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct PrSummary {
+    /// Pull request number.
     pub id: u64,
+    /// Title.
     pub title: String,
+    /// `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED`.
     pub state: String,
+    /// Whether it is a draft.
     pub draft: bool,
+    /// Who opened it.
     pub author: Option<Account>,
+    /// Branch the changes come from.
     pub source_branch: String,
+    /// Branch the changes go into.
     pub destination_branch: String,
+    /// Number of comments.
     pub comment_count: u64,
+    /// Number of open tasks.
     pub task_count: u64,
+    /// ISO 8601 creation time.
     pub created_on: String,
+    /// ISO 8601 time of the last update.
     pub updated_on: String,
+    /// Link to the pull request in Bitbucket.
     pub url: String,
     /// Present for `view` and `list --reviews`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -71,7 +87,7 @@ pub struct PrSummary {
 }
 
 impl PrSummary {
-    fn new(pr: &PullRequest, with_participants: bool) -> Self {
+    pub(crate) fn new(pr: &PullRequest, with_participants: bool) -> Self {
         Self {
             id: pr.id,
             title: pr.title.clone(),
@@ -91,7 +107,7 @@ impl PrSummary {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 #[serde(transparent)]
 pub struct PrList(pub Vec<PrSummary>);
 
@@ -149,18 +165,23 @@ impl Render for PrList {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct PrDetail {
+    /// The summary fields (flattened into this object).
     #[serde(flatten)]
     pub summary: PrSummary,
+    /// Description (markdown).
     pub description: String,
+    /// Whether the source branch is deleted when the pull request is merged.
     pub close_source_branch: bool,
+    /// Hash of the merge commit, once merged.
     pub merge_commit: Option<String>,
+    /// Why it was declined, when it was.
     pub reason: Option<String>,
 }
 
 impl PrDetail {
-    fn new(pr: &PullRequest) -> Self {
+    pub(crate) fn new(pr: &PullRequest) -> Self {
         Self {
             summary: PrSummary::new(pr, true),
             description: pr.description_text(),
@@ -218,8 +239,9 @@ impl Render for PrDetail {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct Created {
+    /// The pull requests that were created, one per destination branch.
     pub pull_requests: Vec<PrSummary>,
 }
 
@@ -238,9 +260,11 @@ impl Render for Created {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct ActionResult {
+    /// Pull request number.
     pub pull_request: u64,
+    /// What happened: `approved`, `approval_removed`, `changes_requested` or `change_request_removed`.
     pub action: &'static str,
 }
 
@@ -254,9 +278,11 @@ impl Render for ActionResult {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct DiffResult {
+    /// Pull request number.
     pub pull_request: u64,
+    /// The unified diff.
     pub diff: String,
 }
 
@@ -266,12 +292,17 @@ impl Render for DiffResult {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct CommitRow {
+    /// Full commit hash.
     pub hash: String,
+    /// Author's display name.
     pub author: String,
+    /// ISO 8601 commit time.
     pub date: String,
+    /// First line of the commit message.
     pub subject: String,
+    /// Link to the commit in Bitbucket.
     pub url: String,
 }
 
@@ -292,7 +323,7 @@ impl From<&Commit> for CommitRow {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 #[serde(transparent)]
 pub struct CommitList(pub Vec<CommitRow>);
 
@@ -316,11 +347,15 @@ impl Render for CommitList {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct FileRow {
+    /// Path of the changed file (the old path for removed files).
     pub path: String,
+    /// `added`, `modified`, `removed` or `renamed`.
     pub status: String,
+    /// Lines added.
     pub lines_added: u64,
+    /// Lines removed.
     pub lines_removed: u64,
 }
 
@@ -335,7 +370,7 @@ impl From<&DiffStat> for FileRow {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 #[serde(transparent)]
 pub struct FileList(pub Vec<FileRow>);
 

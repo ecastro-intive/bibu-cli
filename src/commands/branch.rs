@@ -2,6 +2,7 @@
 
 use comfy_table::presets::NOTHING;
 use comfy_table::Table;
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::confirm;
@@ -13,15 +14,19 @@ use crate::output::{render, Mode, Render};
 use crate::repo::RepoRef;
 use crate::terminal::Terminal;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct BranchRow {
+    /// Branch name.
     pub name: String,
     /// Commit at the tip of the branch.
     pub hash: String,
+    /// ISO 8601 time of the tip commit.
     pub date: String,
+    /// Author of the tip commit.
     pub author: String,
     /// First line of the tip commit's message.
     pub message: String,
+    /// Whether this is the repository's default branch.
     pub default: bool,
 }
 
@@ -55,7 +60,7 @@ impl Render for BranchRow {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 #[serde(transparent)]
 pub struct BranchList(pub Vec<BranchRow>);
 
@@ -84,9 +89,11 @@ impl Render for BranchList {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct BranchAction {
+    /// Branch name.
     pub branch: String,
+    /// What happened: `deleted`.
     pub action: &'static str,
 }
 
