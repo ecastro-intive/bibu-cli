@@ -5,7 +5,12 @@ edition = "2021"
 rust-version = "1.85"
 description = "Bitbucket Cloud CLI for humans and AI agents"
 license = "MIT"
+repository = "https://github.com/ecastro-intive/bibu-cli"
 publish = false
+
+[package.metadata.dist]
+# `publish = false` keeps bibu off crates.io; this still lets `dist` build and release it.
+dist = true
 
 [lib]
 name = "bibu"
@@ -47,3 +52,8 @@ unsafe_code = "forbid"
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
