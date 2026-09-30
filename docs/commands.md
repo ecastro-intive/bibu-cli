@@ -54,6 +54,7 @@ These are accepted by every command.
 - [`bibu branch delete`](#bibu-branch-delete): Delete a branch (asks for confirmation; --yes skips it; never the default branch)
 - [`bibu member list`](#bibu-member-list): List workspace members
 - [`bibu member find`](#bibu-member-find): Find members by name, nickname, account id or uuid
+- [`bibu upgrade`](#bibu-upgrade): Install the newest bibu release (only for copies installed with the official installer)
 - [`bibu schema`](#bibu-schema): Describe every command, argument and output as JSON (for agents and tools)
 - [`bibu repo`](#bibu-repo): Show which repository bibu resolved (from --repo, BIBU_REPO or the git remote)
 
@@ -1291,6 +1292,33 @@ The value is an array; each element has:
 | `[].[].uuid` | string | Bitbucket uuid, with braces. |
 | `[].[].nickname` | string or null | Short handle, when the account has one. |
 | `[].[].account_id` | string or null | Atlassian account id. |
+
+## `bibu upgrade`
+
+Install the newest bibu release (only for copies installed with the official installer)
+
+```text
+Install the newest bibu release from GitHub over this one.
+
+Works for copies installed with the official installer (see the README), which leaves a receipt saying where bibu came from. A copy built from source or installed another way is left alone and you are told how to get an upgradable one. Use --check to only look.
+```
+
+```text
+bibu upgrade [OPTIONS]
+```
+
+| Argument | Description | Notes |
+|---|---|---|
+| `--check` | Only report whether a newer release exists; install nothing | default `false` |
+
+**Output** (the running and latest versions, and whether bibu was upgraded)
+
+| Field | Type | Description |
+|---|---|---|
+| `current_version` | string | The version that is running now. |
+| `latest_version` | string | The newest published version. |
+| `update_available` | boolean | Whether the newest version is newer than the running one. |
+| `upgraded` | boolean | Whether this command installed it. Always false with `--check`. |
 
 ## `bibu schema`
 

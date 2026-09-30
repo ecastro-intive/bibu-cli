@@ -53,7 +53,7 @@ pub struct ErrorDetail {
     pub hint: Option<&'static str>,
 }
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 pub enum BibuError {
     #[error("{0}")]
     Usage(String),

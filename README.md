@@ -20,7 +20,8 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/ecastro-intive/bib
 
 The installer puts `bibu` in `~/.local/bin` (make sure that is on your `PATH`), verifies the download
 checksum, and records how bibu was installed so it can be upgraded later. Check with `bibu --version`.
-To upgrade, run the same command again.
+To upgrade later, run `bibu upgrade` (or `bibu upgrade --check` to only look). It works for copies
+that were installed with the installer; a copy built from source is told how to get one.
 
 The binaries are **not code-signed**. The installers download with `curl` / PowerShell, which macOS
 does not flag. If you download an archive with a browser instead, macOS may refuse to open it; clear
