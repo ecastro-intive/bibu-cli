@@ -1,8 +1,10 @@
 //! Command handlers. Each returns a `Render` value; `dispatch` turns it into text.
 
 pub mod auth;
+pub mod branch;
 pub mod comment;
 pub mod member;
+pub mod pipeline;
 pub mod pr;
 pub mod reviewers;
 pub mod task;
@@ -19,6 +21,14 @@ use crate::terminal::Terminal;
 pub fn dispatch(cli: &Cli, ctx: &Context, term: &dyn Terminal, mode: Mode) -> Result<String> {
     match &cli.command {
         Command::Pr { command } => pr::run(command, cli, ctx, term, mode),
+        Command::Pipeline { command } => {
+            let repo = repo::resolve(cli.repo.as_deref())?;
+            pipeline::run(command, &repo, &ctx.client()?, mode, cli.json)
+        }
+        Command::Branch { command } => {
+            let repo = repo::resolve(cli.repo.as_deref())?;
+            branch::run(command, &repo, &ctx.client()?, term, cli.yes, mode)
+        }
         Command::Member { workspace, command } => {
             let workspace = match workspace {
                 Some(workspace) => workspace.clone(),

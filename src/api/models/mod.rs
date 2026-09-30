@@ -2,7 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod branch;
 pub mod comment;
+pub mod pipeline;
 pub mod pullrequest;
 pub mod task;
 

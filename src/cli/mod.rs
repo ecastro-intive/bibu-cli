@@ -43,6 +43,16 @@ pub enum Command {
         #[command(subcommand)]
         command: PrCommand,
     },
+    /// Bitbucket Pipelines: list runs, inspect one, read step logs
+    Pipeline {
+        #[command(subcommand)]
+        command: PipelineCommand,
+    },
+    /// Branches: list, create, delete
+    Branch {
+        #[command(subcommand)]
+        command: BranchCommand,
+    },
     /// Workspace members (used to find people for reviewers)
     Member {
         /// Workspace slug [default: the workspace of the resolved repository]
@@ -414,5 +424,95 @@ pub enum MemberCommand {
     Find {
         /// Text to look for (case-insensitive)
         query: String,
+    },
+}
+
+/// Pipeline status as `bibu` reports it (lowercase). Finished runs report their result, running
+/// ones their stage, the rest their state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum PipelineStatus {
+    Pending,
+    Parsing,
+    Running,
+    Paused,
+    Halted,
+    Successful,
+    Failed,
+    Stopped,
+    Error,
+}
+
+impl PipelineStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Parsing => "parsing",
+            Self::Running => "running",
+            Self::Paused => "paused",
+            Self::Halted => "halted",
+            Self::Successful => "successful",
+            Self::Failed => "failed",
+            Self::Stopped => "stopped",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[derive(Debug, Subcommand)]
+pub enum PipelineCommand {
+    /// List pipeline runs, newest first
+    List {
+        /// Only runs of this branch
+        #[arg(long)]
+        branch: Option<String>,
+        /// Only runs with this status
+        #[arg(long, value_enum)]
+        status: Option<PipelineStatus>,
+        #[command(flatten)]
+        paging: Paging,
+    },
+    /// Show one run and its steps
+    #[command(long_about = "Show one pipeline run and its steps.\n\n\
+        The run is a build number (as in the Bitbucket UI, e.g. 42) or a uuid.")]
+    View {
+        /// Build number or uuid
+        id: String,
+    },
+    /// Print step logs (raw text unless --json)
+    #[command(long_about = "Print the logs of a pipeline run.\n\n\
+        Without --step every step's log is printed under a header; with --step only that step. \
+        A step is its name, its 1-based position, or its uuid. Output is raw text even when piped \
+        so it can go through grep; add --json for {pipeline, steps: [{name, status, log}]}.")]
+    Logs {
+        /// Build number or uuid
+        id: String,
+        /// Only this step: name, 1-based number, or uuid
+        #[arg(long)]
+        step: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BranchCommand {
+    /// List branches, most recently updated first
+    List {
+        /// Only branches whose name contains this text (case-insensitive)
+        #[arg(long)]
+        name: Option<String>,
+        #[command(flatten)]
+        paging: Paging,
+    },
+    /// Create a branch from a branch or a commit
+    Create {
+        /// Name of the new branch
+        name: String,
+        /// Branch name or commit hash to start from [default: the repository's default branch]
+        #[arg(long)]
+        from: Option<String>,
+    },
+    /// Delete a branch (asks for confirmation; --yes skips it; never the default branch)
+    Delete {
+        /// Branch name
+        name: String,
     },
 }
