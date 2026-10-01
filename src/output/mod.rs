@@ -1,5 +1,7 @@
 //! Output rendering. One value, two views: a human table or JSON for machines.
 
+pub mod table;
+
 use std::io::IsTerminal;
 
 use serde::Serialize;

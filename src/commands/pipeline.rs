@@ -1,7 +1,5 @@
 //! `bibu pipeline list | view | logs`
 
-use comfy_table::presets::NOTHING;
-use comfy_table::Table;
 use schemars::JsonSchema;
 use serde::Serialize;
 
@@ -10,6 +8,7 @@ use crate::api::models::Account;
 use crate::api::{pipelines as api, Client};
 use crate::cli::PipelineCommand;
 use crate::error::{BibuError, Result};
+use crate::output::table::{self, Column, NARROW, TINY};
 use crate::output::{render, Mode, Render};
 use crate::repo::RepoRef;
 
@@ -129,31 +128,40 @@ impl Render for PipelineList {
         if self.0.is_empty() {
             return "No pipelines found.".to_string();
         }
-        let mut table = Table::new();
-        table.load_preset(NOTHING);
-        table.set_header(vec![
-            "#", "STATUS", "BRANCH", "COMMIT", "TRIGGER", "CREATOR", "CREATED", "TOOK",
-        ]);
-        for p in &self.0 {
-            table.add_row(vec![
-                format!("#{}", p.build_number),
-                p.status.clone(),
-                p.branch.clone(),
-                p.commit
-                    .as_deref()
-                    .and_then(|h| h.get(..7))
-                    .unwrap_or("")
-                    .to_string(),
-                p.trigger.clone().unwrap_or_default().to_lowercase(),
-                p.creator
-                    .as_ref()
-                    .map(|c| c.display_name.clone())
-                    .unwrap_or_default(),
-                day(&p.created_on).to_string(),
-                opt_duration(p.duration_seconds),
-            ]);
-        }
-        table.to_string()
+        const COLUMNS: [Column; 8] = [
+            Column::keep("#"),
+            Column::keep("STATUS"),
+            Column::flex("BRANCH"),
+            Column::keep("COMMIT"),
+            Column::keep_below("TRIGGER", NARROW),
+            Column::flex_below("CREATOR", TINY),
+            Column::keep_below("CREATED", NARROW),
+            Column::keep("TOOK"),
+        ];
+        let rows = self
+            .0
+            .iter()
+            .map(|p| {
+                vec![
+                    format!("#{}", p.build_number),
+                    p.status.clone(),
+                    p.branch.clone(),
+                    p.commit
+                        .as_deref()
+                        .and_then(|h| h.get(..7))
+                        .unwrap_or("")
+                        .to_string(),
+                    p.trigger.clone().unwrap_or_default().to_lowercase(),
+                    p.creator
+                        .as_ref()
+                        .map(|c| c.display_name.clone())
+                        .unwrap_or_default(),
+                    day(&p.created_on).to_string(),
+                    opt_duration(p.duration_seconds),
+                ]
+            })
+            .collect();
+        table::render(&COLUMNS, rows)
     }
 }
 
@@ -190,18 +198,26 @@ impl Render for PipelineDetail {
         ];
         if !self.steps.is_empty() {
             lines.push(String::new());
-            let mut table = Table::new();
-            table.load_preset(NOTHING);
-            table.set_header(vec!["STEP", "NAME", "STATUS", "TOOK"]);
-            for (i, s) in self.steps.iter().enumerate() {
-                table.add_row(vec![
-                    (i + 1).to_string(),
-                    s.name.clone(),
-                    s.status.clone(),
-                    opt_duration(s.duration_seconds),
-                ]);
-            }
-            lines.push(table.to_string());
+            const COLUMNS: [Column; 4] = [
+                Column::keep("STEP"),
+                Column::flex("NAME"),
+                Column::keep("STATUS"),
+                Column::keep("TOOK"),
+            ];
+            let rows = self
+                .steps
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    vec![
+                        (i + 1).to_string(),
+                        s.name.clone(),
+                        s.status.clone(),
+                        opt_duration(s.duration_seconds),
+                    ]
+                })
+                .collect();
+            lines.push(table::render(&COLUMNS, rows));
         }
         lines.join("\n")
     }
