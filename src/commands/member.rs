@@ -46,6 +46,11 @@ pub fn run(
             mode,
         )),
         MemberCommand::Find { query } => {
+            if query.trim().is_empty() {
+                return Err(BibuError::Usage(
+                    "give a name, nickname, account id or part of one to look for".to_string(),
+                ));
+            }
             let all = members::list(client, workspace, Limit::All)?;
             Ok(render(&MemberList(find(&all, query)), mode))
         }
@@ -78,6 +83,11 @@ fn is_partial(account: &Account, query: &str) -> bool {
 /// Everyone matching `query`: exact matches (uuid, account id, nickname, name) win outright;
 /// otherwise case-insensitive substring matches on name and nickname.
 pub fn find(accounts: &[Account], query: &str) -> Vec<Account> {
+    let query = query.trim();
+    // Every name "contains" the empty string; matching everyone would be useless and dangerous.
+    if query.is_empty() {
+        return Vec::new();
+    }
     let exact: Vec<_> = accounts
         .iter()
         .filter(|a| is_exact(a, query))
@@ -95,6 +105,9 @@ pub fn find(accounts: &[Account], query: &str) -> Vec<Account> {
 
 /// Exactly one person from `candidates`, or a helpful error.
 pub fn pick(candidates: &[Account], query: &str, what: &str) -> Result<Account> {
+    if query.trim().is_empty() {
+        return Err(empty_query());
+    }
     let matches = find(candidates, query);
     match matches.as_slice() {
         [one] => Ok(one.clone()),
@@ -110,6 +123,12 @@ pub fn pick(candidates: &[Account], query: &str, what: &str) -> Result<Account> 
     }
 }
 
+fn empty_query() -> BibuError {
+    BibuError::Usage(
+        "the name is empty; give a name, nickname, account id, `{uuid}` or `me`".to_string(),
+    )
+}
+
 fn looks_like_uuid(query: &str) -> bool {
     query.len() > 2 && query.starts_with('{') && query.ends_with('}')
 }
@@ -117,6 +136,10 @@ fn looks_like_uuid(query: &str) -> bool {
 /// Turns what a person typed into an account with a uuid: `me`, `{uuid}`, or a lookup among
 /// the workspace members.
 pub fn resolve_user(client: &Client, workspace: &str, query: &str) -> Result<Account> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Err(empty_query());
+    }
     if query.eq_ignore_ascii_case("me") {
         return user::current(client);
     }
@@ -179,6 +202,31 @@ mod tests {
         assert_eq!(find(&team(), "dors").len(), 1);
         assert_eq!(find(&team(), "ja").len(), 2);
         assert!(find(&team(), "zzz").is_empty());
+    }
+
+    #[test]
+    fn an_empty_or_blank_query_matches_nobody() {
+        for query in ["", "   ", "\t"] {
+            assert!(find(&team(), query).is_empty(), "{query:?}");
+        }
+    }
+
+    #[test]
+    fn picking_with_an_empty_query_is_a_usage_error_not_a_guess() {
+        for query in ["", "  "] {
+            let err = pick(&team(), query, "reviewer").unwrap_err();
+            assert!(
+                matches!(&err, BibuError::Usage(m) if m.contains("empty")),
+                "{query:?}: {err:?}"
+            );
+        }
+        // even a one-person list must not be picked by an empty query
+        assert!(pick(&team()[..1], "", "reviewer").is_err());
+    }
+
+    #[test]
+    fn surrounding_spaces_are_ignored() {
+        assert_eq!(find(&team(), "  bob  ").len(), 1);
     }
 
     #[test]

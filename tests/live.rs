@@ -598,8 +598,13 @@ fn pull_request_review_flow() {
         .unwrap()
         .is_empty());
     live.fails(&["pr", "reviewers", "add", id_s, "me"], 6);
-    match std::env::var("BIBU_TEST_REVIEWER") {
-        Ok(reviewer) => {
+    live.fails(&["pr", "reviewers", "add", id_s, ""], 2);
+    // An unset CI secret arrives as an empty string: that means "not configured".
+    match std::env::var("BIBU_TEST_REVIEWER")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    {
+        Some(reviewer) => {
             let added = live.ok(&["pr", "reviewers", "add", id_s, &reviewer]);
             assert_eq!(added["reviewers"].as_array().unwrap().len(), 1, "{added}");
             let again = live.ok(&["pr", "reviewers", "add", id_s, &reviewer]);
@@ -616,7 +621,7 @@ fn pull_request_review_flow() {
             let removed = live.ok(&["pr", "reviewers", "remove", id_s, &reviewer]);
             assert!(removed["reviewers"].as_array().unwrap().is_empty());
         }
-        Err(_) => eprintln!("note: BIBU_TEST_REVIEWER not set, reviewer add/remove not exercised"),
+        None => eprintln!("note: BIBU_TEST_REVIEWER not set, reviewer add/remove not exercised"),
     }
 
     // ---- review decisions
