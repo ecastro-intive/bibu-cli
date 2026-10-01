@@ -1,7 +1,5 @@
 //! `bibu pr task list | add | resolve | reopen`
 
-use comfy_table::presets::NOTHING;
-use comfy_table::Table;
 use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -12,6 +10,7 @@ use crate::api::models::Account;
 use crate::api::{tasks as api, Client};
 use crate::cli::TaskCommand;
 use crate::error::Result;
+use crate::output::table::{self, Column, NARROW, TINY};
 use crate::output::{render, Mode, Render};
 use crate::repo::RepoRef;
 use crate::terminal::Terminal;
@@ -94,23 +93,32 @@ impl Render for TaskList {
         if self.0.is_empty() {
             return "No tasks.".to_string();
         }
-        let mut table = Table::new();
-        table.load_preset(NOTHING);
-        table.set_header(vec!["ID", "DONE", "TASK", "BY", "CREATED", "COMMENT"]);
-        for t in &self.0 {
-            table.add_row(vec![
-                format!("#{}", t.id),
-                if t.state == "RESOLVED" { "yes" } else { "no" }.to_string(),
-                t.content.clone(),
-                t.creator
-                    .as_ref()
-                    .map(|c| c.display_name.clone())
-                    .unwrap_or_default(),
-                day(&t.created_on).to_string(),
-                t.comment_id.map(|c| format!("#{c}")).unwrap_or_default(),
-            ]);
-        }
-        table.to_string()
+        const COLUMNS: [Column; 6] = [
+            Column::keep("ID"),
+            Column::keep("DONE"),
+            Column::flex("TASK"),
+            Column::flex_below("BY", TINY),
+            Column::keep_below("CREATED", NARROW),
+            Column::keep("COMMENT"),
+        ];
+        let rows = self
+            .0
+            .iter()
+            .map(|t| {
+                vec![
+                    format!("#{}", t.id),
+                    if t.state == "RESOLVED" { "yes" } else { "no" }.to_string(),
+                    t.content.clone(),
+                    t.creator
+                        .as_ref()
+                        .map(|c| c.display_name.clone())
+                        .unwrap_or_default(),
+                    day(&t.created_on).to_string(),
+                    t.comment_id.map(|c| format!("#{c}")).unwrap_or_default(),
+                ]
+            })
+            .collect();
+        table::render(&COLUMNS, rows)
     }
 }
 

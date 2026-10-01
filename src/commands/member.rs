@@ -1,7 +1,5 @@
 //! `bibu member list | find`, plus name-to-account lookup used by `pr reviewers`.
 
-use comfy_table::presets::NOTHING;
-use comfy_table::Table;
 use schemars::JsonSchema;
 use serde::Serialize;
 
@@ -9,6 +7,7 @@ use crate::api::models::Account;
 use crate::api::{members, user, Client, Limit};
 use crate::cli::MemberCommand;
 use crate::error::{BibuError, Result};
+use crate::output::table::{self, Column, TINY};
 use crate::output::{render, Mode, Render};
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -20,17 +19,23 @@ impl Render for MemberList {
         if self.0.is_empty() {
             return "No members found.".to_string();
         }
-        let mut table = Table::new();
-        table.load_preset(NOTHING);
-        table.set_header(vec!["NAME", "NICKNAME", "UUID"]);
-        for a in &self.0 {
-            table.add_row(vec![
-                a.display_name.clone(),
-                a.nickname.clone().unwrap_or_default(),
-                a.uuid.clone(),
-            ]);
-        }
-        table.to_string()
+        const COLUMNS: [Column; 3] = [
+            Column::flex("NAME"),
+            Column::flex_below("NICKNAME", TINY),
+            Column::flex("UUID"),
+        ];
+        let rows = self
+            .0
+            .iter()
+            .map(|a| {
+                vec![
+                    a.display_name.clone(),
+                    a.nickname.clone().unwrap_or_default(),
+                    a.uuid.clone(),
+                ]
+            })
+            .collect();
+        table::render(&COLUMNS, rows)
     }
 }
 

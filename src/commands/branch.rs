@@ -1,7 +1,5 @@
 //! `bibu branch list | create | delete`
 
-use comfy_table::presets::NOTHING;
-use comfy_table::Table;
 use schemars::JsonSchema;
 use serde::Serialize;
 
@@ -10,6 +8,7 @@ use crate::api::models::branch::Branch;
 use crate::api::{branches as api, Client};
 use crate::cli::BranchCommand;
 use crate::error::{BibuError, Result};
+use crate::output::table::{self, Column, NARROW, TINY};
 use crate::output::{render, Mode, Render};
 use crate::repo::RepoRef;
 use crate::terminal::Terminal;
@@ -69,23 +68,31 @@ impl Render for BranchList {
         if self.0.is_empty() {
             return "No branches found.".to_string();
         }
-        let mut table = Table::new();
-        table.load_preset(NOTHING);
-        table.set_header(vec!["BRANCH", "COMMIT", "AUTHOR", "UPDATED", "MESSAGE"]);
-        for b in &self.0 {
-            table.add_row(vec![
-                if b.default {
-                    format!("{} (default)", b.name)
-                } else {
-                    b.name.clone()
-                },
-                b.hash.get(..7).unwrap_or(&b.hash).to_string(),
-                b.author.clone(),
-                day(&b.date).to_string(),
-                b.message.clone(),
-            ]);
-        }
-        table.to_string()
+        const COLUMNS: [Column; 5] = [
+            Column::flex("BRANCH"),
+            Column::keep("COMMIT"),
+            Column::flex_below("AUTHOR", TINY),
+            Column::keep_below("UPDATED", NARROW),
+            Column::flex("MESSAGE"),
+        ];
+        let rows = self
+            .0
+            .iter()
+            .map(|b| {
+                vec![
+                    if b.default {
+                        format!("{} (default)", b.name)
+                    } else {
+                        b.name.clone()
+                    },
+                    b.hash.get(..7).unwrap_or(&b.hash).to_string(),
+                    b.author.clone(),
+                    day(&b.date).to_string(),
+                    b.message.clone(),
+                ]
+            })
+            .collect();
+        table::render(&COLUMNS, rows)
     }
 }
 

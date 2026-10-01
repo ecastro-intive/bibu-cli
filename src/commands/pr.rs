@@ -1,7 +1,5 @@
 //! `bibu pr ...`
 
-use comfy_table::presets::NOTHING;
-use comfy_table::Table;
 use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
@@ -12,6 +10,7 @@ use crate::api::{pullrequests as api, user};
 use crate::cli::{Cli, MergeStrategy, PrCommand};
 use crate::context::Context;
 use crate::error::{BibuError, Result};
+use crate::output::table::{self, Column, NARROW, TINY};
 use crate::output::{render, Mode, Render};
 use crate::repo;
 use crate::terminal::Terminal;
@@ -135,33 +134,41 @@ impl Render for PrList {
             return "No pull requests found.".to_string();
         }
         let with_reviews = self.0.iter().any(|p| p.participants.is_some());
-        let mut table = Table::new();
-        table.load_preset(NOTHING);
-        let mut header = vec!["ID", "STATE", "TITLE", "AUTHOR", "BRANCH", "UPDATED"];
+        let mut columns = vec![
+            Column::keep("ID"),
+            Column::keep("STATE"),
+            Column::flex("TITLE"),
+            Column::flex_below("AUTHOR", TINY),
+            Column::flex("BRANCH"),
+            Column::keep_below("UPDATED", NARROW),
+        ];
         if with_reviews {
-            header.push("REVIEWS");
+            columns.push(Column::flex("REVIEWS"));
         }
-        table.set_header(header);
-        for pr in &self.0 {
-            let title = if pr.draft {
-                format!("[draft] {}", pr.title)
-            } else {
-                pr.title.clone()
-            };
-            let mut row = vec![
-                format!("#{}", pr.id),
-                pr.state.clone(),
-                title,
-                author_name(&pr.author).to_string(),
-                format!("{} -> {}", pr.source_branch, pr.destination_branch),
-                day(&pr.updated_on).to_string(),
-            ];
-            if with_reviews {
-                row.push(reviews_summary(pr.participants.as_deref().unwrap_or(&[])));
-            }
-            table.add_row(row);
-        }
-        table.to_string()
+        let rows = self
+            .0
+            .iter()
+            .map(|pr| {
+                let title = if pr.draft {
+                    format!("[draft] {}", pr.title)
+                } else {
+                    pr.title.clone()
+                };
+                let mut row = vec![
+                    format!("#{}", pr.id),
+                    pr.state.clone(),
+                    title,
+                    author_name(&pr.author).to_string(),
+                    format!("{} -> {}", pr.source_branch, pr.destination_branch),
+                    day(&pr.updated_on).to_string(),
+                ];
+                if with_reviews {
+                    row.push(reviews_summary(pr.participants.as_deref().unwrap_or(&[])));
+                }
+                row
+            })
+            .collect();
+        table::render(&columns, rows)
     }
 }
 
@@ -332,18 +339,25 @@ impl Render for CommitList {
         if self.0.is_empty() {
             return "No commits.".to_string();
         }
-        let mut table = Table::new();
-        table.load_preset(NOTHING);
-        table.set_header(vec!["HASH", "AUTHOR", "DATE", "SUBJECT"]);
-        for c in &self.0 {
-            table.add_row(vec![
-                c.hash.get(..7).unwrap_or(&c.hash).to_string(),
-                c.author.clone(),
-                day(&c.date).to_string(),
-                c.subject.clone(),
-            ]);
-        }
-        table.to_string()
+        const COLUMNS: [Column; 4] = [
+            Column::keep("HASH"),
+            Column::flex_below("AUTHOR", TINY),
+            Column::keep_below("DATE", NARROW),
+            Column::flex("SUBJECT"),
+        ];
+        let rows = self
+            .0
+            .iter()
+            .map(|c| {
+                vec![
+                    c.hash.get(..7).unwrap_or(&c.hash).to_string(),
+                    c.author.clone(),
+                    day(&c.date).to_string(),
+                    c.subject.clone(),
+                ]
+            })
+            .collect();
+        table::render(&COLUMNS, rows)
     }
 }
 
@@ -379,18 +393,25 @@ impl Render for FileList {
         if self.0.is_empty() {
             return "No changed files.".to_string();
         }
-        let mut table = Table::new();
-        table.load_preset(NOTHING);
-        table.set_header(vec!["STATUS", "+", "-", "PATH"]);
-        for f in &self.0 {
-            table.add_row(vec![
-                f.status.clone(),
-                f.lines_added.to_string(),
-                f.lines_removed.to_string(),
-                f.path.clone(),
-            ]);
-        }
-        table.to_string()
+        const COLUMNS: [Column; 4] = [
+            Column::keep("STATUS"),
+            Column::keep("+"),
+            Column::keep("-"),
+            Column::flex("PATH"),
+        ];
+        let rows = self
+            .0
+            .iter()
+            .map(|f| {
+                vec![
+                    f.status.clone(),
+                    f.lines_added.to_string(),
+                    f.lines_removed.to_string(),
+                    f.path.clone(),
+                ]
+            })
+            .collect();
+        table::render(&COLUMNS, rows)
     }
 }
 
