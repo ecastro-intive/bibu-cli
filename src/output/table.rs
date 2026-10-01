@@ -194,6 +194,25 @@ mod tests {
     }
 
     #[test]
+    fn never_overflows_the_terminal_at_any_width() {
+        let mut rows = rows();
+        rows.push(vec![
+            "#123".into(),
+            "OPEN".into(),
+            "feature/SCRP-17446-update-labels-for-expire-on-date".into(),
+            "Mariano Araoz".into(),
+            "2025-12-03".into(),
+        ]);
+        for width in 50..=140u16 {
+            let text = render_at(&COLUMNS, rows.clone(), Some(width));
+            assert!(
+                widest_line(&text) <= usize::from(width),
+                "overflow at {width}:\n{text}"
+            );
+        }
+    }
+
+    #[test]
     fn keeps_every_column_without_a_terminal() {
         let text = render_at(&COLUMNS, rows(), None);
         assert!(
