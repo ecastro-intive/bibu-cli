@@ -62,7 +62,10 @@ or force-push.
 
 ## 6. Watch and verify
 
-- `gh run list --workflow release.yml --limit 1`, then `gh run watch <id>` until it finishes.
+- `gh run list --workflow release.yml --limit 1`. The run builds, then **waits for approval of the
+  `release` environment** (Actions tab, "Review deployments"). Approving is the user's decision:
+  tell them the run is waiting and give them its URL. Never approve the deployment yourself unless
+  they explicitly say to in this session. Then `gh run watch <id>` until it finishes.
 - `gh release view v<version>` lists the macOS and Windows archives, `bibu-installer.sh`,
   `bibu-installer.ps1` and checksums.
 - Install with the published installer in a throwaway `HOME` and check the version:

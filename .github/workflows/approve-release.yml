@@ -1,0 +1,20 @@
+# Manual approval gate for releases. Not run directly: dist wires it into release.yml
+# (`global-artifacts-jobs` in dist-workspace.toml). It runs after the artifacts are built and the
+# `host` job, which creates the GitHub Release, only runs once a reviewer of the `release`
+# environment approves it. A rejected approval fails this job, so nothing is published.
+# Pull request runs skip it; only tag runs wait.
+name: Approve release
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  approve:
+    name: Approve release
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - run: echo "Release ${GITHUB_REF_NAME} approved"
