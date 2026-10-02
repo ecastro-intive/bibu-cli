@@ -121,8 +121,11 @@ from a pull request: PRs only run `dist plan`, which also fails if the workflow 
    It works in a temporary worktree and a throwaway `HOME` (macOS / Linux; needs `dist`).
 1. Raise `version` in `Cargo.toml` in a pull request (`chore: release 0.2.0`) and merge it.
 2. From an up-to-date `main`: `git tag v0.2.0 && git push origin v0.2.0`.
-3. The workflow builds the macOS and Windows archives, the two installers and checksums, and creates
-   the GitHub Release. Check that `bibu --version` from the installer reports the new version.
+3. The workflow builds the macOS and Windows archives, the two installers and checksums, then waits
+   for approval: open the run in the Actions tab, choose "Review deployments", tick `release` and
+   approve. Only then does it create the GitHub Release. Rejecting the deployment stops the release
+   without publishing anything.
+4. Check that `bibu --version` from the installer reports the new version.
 
 Changing targets or installers means editing `dist-workspace.toml` and running `dist generate`
 (install it with `cargo install cargo-dist --locked --version 0.32.0`), then committing the result.
@@ -134,3 +137,14 @@ Releases are not code-signed; see the README for why that is fine for installer-
 - Describe what changed and how you verified it. Mention anything you could not test against
   real Bitbucket.
 - CI must be green.
+
+## Repository rules
+
+These live in the GitHub settings, not in the code (Settings, Rules and Environments):
+
+- `main` is protected by a ruleset: no direct pushes, force pushes or deletion. Changes go through a
+  pull request that needs CI green and an approval from the code owner (`.github/CODEOWNERS`).
+- The repository admin can merge a pull request without the approval (GitHub never counts an author's
+  own approval), but still only through a pull request, never by pushing to `main`.
+- Only the repository admin can create, move or delete `v*` tags.
+- Publishing a release needs approval from a reviewer of the `release` environment, see Releasing.

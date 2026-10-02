@@ -17,3 +17,5 @@ install-path = "~/.local/bin"
 install-updater = false
 # Which actions to run on pull requests
 pr-run-mode = "plan"
+# A reviewer of the `release` environment must approve before the release is published
+global-artifacts-jobs = ["./approve-release"]
