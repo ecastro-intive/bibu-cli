@@ -7,6 +7,11 @@ name: Approve release
 
 on:
   workflow_call:
+    inputs:
+      # dist passes the release plan to every custom job; the gate does not use it.
+      plan:
+        required: true
+        type: string
 
 permissions: {}
 
