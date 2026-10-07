@@ -63,8 +63,24 @@ Copy-Item -Recurse skills\bibu $HOME\.claude\skills\                   # Windows
 ## Authentication
 
 bibu logs in with your **Atlassian account email** and a Bitbucket **API token**
-(app passwords are retired). Create the token in Bitbucket under *Personal settings > API tokens*
-and grant the scopes for the commands you use. `bibu auth status` needs `read:user:bitbucket`.
+(app passwords are retired). Grant the token the scopes for the commands you use.
+`bibu auth status` needs `read:user:bitbucket`.
+
+### Create an API token
+
+Follow Atlassian's guide, [Create an API token](https://support.atlassian.com/bitbucket-cloud/docs/create-an-api-token/),
+or in short:
+
+1. Click your profile icon (top right) and choose *Account settings*.
+2. Open the *Security* tab and choose *Create and manage API tokens*.
+3. Click *Create API token with scopes*.
+4. Enter a name and an expiry date, then click *Next*.
+5. Select *Bitbucket* as the app and click *Next*.
+6. Select the scopes you need (see the scopes listed per command below). Without scopes the token cannot call the Bitbucket API.
+7. Review, click *Create token* and copy it right away. Atlassian shows it only once.
+
+Then run `bibu auth login` with your Atlassian account email and the token. When the token
+expires, create a new one and log in again.
 
 ```sh
 bibu auth login                      # prompts for email and (hidden) token
