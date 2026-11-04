@@ -243,6 +243,7 @@ bibu pr create [OPTIONS] --destination <DESTINATION>
 | `-s`, `--source <SOURCE>` | Source branch [default: current git branch] |  |
 | `-t`, `--title <TITLE>` | Title [default: "Merge <source> into <destination>"] |  |
 | `-m`, `--description <DESCRIPTION>` | Description (markdown) |  |
+| `-i`, `--image <PATH>` | Upload an image (png, jpg, gif, webp, svg) and embed it; repeatable | repeatable |
 | `--draft` | Create as a draft | default `false` |
 | `--close-source-branch` | Delete the source branch when the pull request is merged | default `false` |
 | `--no-default-reviewers` | Do not add the repository's default reviewers | default `false` |
@@ -291,6 +292,7 @@ bibu pr edit [OPTIONS] <ID>
 | `<ID>` | Pull request number | required |
 | `-t`, `--title <TITLE>` | New title |  |
 | `-m`, `--description <DESCRIPTION>` | New description; an empty string clears it |  |
+| `-i`, `--image <PATH>` | Upload an image (png, jpg, gif, webp, svg) and append it to the description; repeatable | repeatable |
 | `-d`, `--destination <DESTINATION>` | New destination branch |  |
 | `--draft` | Convert to a draft | default `false` |
 | `--ready` | Mark a draft as ready for review | default `false` |
@@ -639,6 +641,9 @@ Examples:
   bibu pr comment add 12 "Looks good overall"
   bibu pr comment add 12 --file src/app.py --line 30 "Why this default?"
   echo "long text" | bibu pr comment add 12 --file src/app.py --line 30 --end-line 35
+  bibu pr comment add 12 --image screenshot.png "Before and after"
+
+--image uploads the file to the repository downloads (needs the write:repository:bitbucket scope) and appends it as a markdown image; anyone who can read the repository can see it.
 ```
 
 ```text
@@ -649,6 +654,7 @@ bibu pr comment add [OPTIONS] <ID> [TEXT]
 |---|---|---|
 | `<ID>` | Pull request number | required |
 | `<TEXT>` | Comment text (markdown); `-` or omitted reads stdin |  |
+| `-i`, `--image <PATH>` | Upload an image (png, jpg, gif, webp, svg) and append it to the comment; repeatable | repeatable |
 | `-f`, `--file <FILE>` | File path, relative to the repository root |  |
 | `-l`, `--line <LINE>` | Line number (requires --file) |  |
 | `--end-line <END_LINE>` | Last line of a range that starts at --line |  |
@@ -696,6 +702,7 @@ bibu pr comment reply [OPTIONS] <ID> <COMMENT_ID> [TEXT]
 | `<ID>` | Pull request number | required |
 | `<COMMENT_ID>` | Number of the comment to reply to | required |
 | `<TEXT>` | Reply text (markdown); `-` or omitted reads stdin |  |
+| `-i`, `--image <PATH>` | Upload an image (png, jpg, gif, webp, svg) and append it to the reply; repeatable | repeatable |
 
 **Output** (the comment)
 
@@ -739,6 +746,7 @@ bibu pr comment edit [OPTIONS] <ID> <COMMENT_ID> [TEXT]
 | `<ID>` | Pull request number | required |
 | `<COMMENT_ID>` | Comment number | required |
 | `<TEXT>` | New text (markdown); `-` or omitted reads stdin |  |
+| `-i`, `--image <PATH>` | Upload an image (png, jpg, gif, webp, svg) and append it to the text; repeatable | repeatable |
 
 **Output** (the comment)
 

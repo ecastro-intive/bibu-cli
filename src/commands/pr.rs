@@ -15,7 +15,7 @@ use crate::output::{render, Mode, Render};
 use crate::repo;
 use crate::terminal::Terminal;
 
-use super::confirm;
+use super::{attach_images, confirm, load_images};
 
 // ---------------------------------------------------------------- output types
 
@@ -606,10 +606,12 @@ pub fn run(
             source,
             title,
             description,
+            image,
             draft,
             close_source_branch,
             no_default_reviewers,
         } => {
+            let images = load_images(image)?;
             let source = match source {
                 Some(source) => source.clone(),
                 None => repo::current_branch().ok_or_else(|| {
@@ -624,6 +626,17 @@ pub fn run(
                 vec![]
             } else {
                 api::default_reviewers(&client, &repo)?
+            };
+
+            let description = if images.is_empty() {
+                description.clone()
+            } else {
+                Some(attach_images(
+                    &client,
+                    &repo,
+                    description.as_deref().unwrap_or(""),
+                    images,
+                )?)
             };
 
             let mut created: Vec<PrSummary> = Vec::new();
@@ -669,12 +682,23 @@ pub fn run(
             id,
             title,
             description,
+            image,
             destination,
             draft,
             ready,
             close_source_branch,
             keep_source_branch,
         } => {
+            let images = load_images(image)?;
+            let description = if images.is_empty() {
+                description.clone()
+            } else {
+                let current = match description {
+                    Some(text) => text.clone(),
+                    None => api::get(&client, &repo, *id)?.description_text(),
+                };
+                Some(attach_images(&client, &repo, &current, images)?)
+            };
             let body = edit_payload(&EditFields {
                 title: title.as_deref(),
                 description: description.as_deref(),

@@ -3,6 +3,7 @@
 pub mod branches;
 pub mod client;
 pub mod comments;
+pub mod downloads;
 pub mod members;
 pub mod models;
 pub mod paginate;

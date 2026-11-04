@@ -1,5 +1,7 @@
 //! Command-line definition (clap). Handlers live in `commands/`.
 
+use std::path::PathBuf;
+
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::api::Limit;
@@ -229,6 +231,9 @@ pub enum PrCommand {
         /// Description (markdown)
         #[arg(long, short = 'm')]
         description: Option<String>,
+        /// Upload an image (png, jpg, gif, webp, svg) and embed it; repeatable
+        #[arg(long, short = 'i', value_name = "PATH")]
+        image: Vec<PathBuf>,
         /// Create as a draft
         #[arg(long)]
         draft: bool,
@@ -249,6 +254,9 @@ pub enum PrCommand {
         /// New description; an empty string clears it
         #[arg(long, short = 'm')]
         description: Option<String>,
+        /// Upload an image (png, jpg, gif, webp, svg) and append it to the description; repeatable
+        #[arg(long, short = 'i', value_name = "PATH")]
+        image: Vec<PathBuf>,
         /// New destination branch
         #[arg(long, short = 'd')]
         destination: Option<String>,
@@ -374,12 +382,18 @@ pub enum CommentCommand {
         omit it to read the text from stdin.\n\n\
         Examples:\n  bibu pr comment add 12 \"Looks good overall\"\n  \
         bibu pr comment add 12 --file src/app.py --line 30 \"Why this default?\"\n  \
-        echo \"long text\" | bibu pr comment add 12 --file src/app.py --line 30 --end-line 35")]
+        echo \"long text\" | bibu pr comment add 12 --file src/app.py --line 30 --end-line 35\n  \
+        bibu pr comment add 12 --image screenshot.png \"Before and after\"\n\n\
+        --image uploads the file to the repository downloads (needs the write:repository:bitbucket \
+        scope) and appends it as a markdown image; anyone who can read the repository can see it.")]
     Add {
         /// Pull request number
         id: u64,
         /// Comment text (markdown); `-` or omitted reads stdin
         text: Option<String>,
+        /// Upload an image (png, jpg, gif, webp, svg) and append it to the comment; repeatable
+        #[arg(long, short = 'i', value_name = "PATH")]
+        image: Vec<PathBuf>,
         /// File path, relative to the repository root
         #[arg(long, short = 'f')]
         file: Option<String>,
@@ -401,6 +415,9 @@ pub enum CommentCommand {
         comment_id: u64,
         /// Reply text (markdown); `-` or omitted reads stdin
         text: Option<String>,
+        /// Upload an image (png, jpg, gif, webp, svg) and append it to the reply; repeatable
+        #[arg(long, short = 'i', value_name = "PATH")]
+        image: Vec<PathBuf>,
     },
     /// Change the text of one of your comments
     Edit {
@@ -410,6 +427,9 @@ pub enum CommentCommand {
         comment_id: u64,
         /// New text (markdown); `-` or omitted reads stdin
         text: Option<String>,
+        /// Upload an image (png, jpg, gif, webp, svg) and append it to the text; repeatable
+        #[arg(long, short = 'i', value_name = "PATH")]
+        image: Vec<PathBuf>,
     },
     /// Delete one of your comments (asks for confirmation; --yes skips it)
     Delete {

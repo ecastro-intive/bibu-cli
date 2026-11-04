@@ -10,6 +10,10 @@ pub mod reviewers;
 pub mod task;
 pub mod upgrade;
 
+use std::path::{Path, PathBuf};
+
+use crate::api::client::FilePart;
+use crate::api::{downloads, Client};
 use crate::cli::{AuthCommand, Cli, Command};
 use crate::context::Context;
 use crate::error::BibuError;
@@ -94,6 +98,93 @@ pub(crate) fn read_text(term: &dyn Terminal, text: Option<&str>) -> Result<Strin
     Ok(text)
 }
 
+/// An image read from disk, ready to upload.
+pub(crate) struct Image {
+    stem: String,
+    ext: &'static str,
+    mime: &'static str,
+    bytes: Vec<u8>,
+}
+
+fn image_kind(ext: &str) -> Option<(&'static str, &'static str)> {
+    match ext {
+        "png" => Some(("png", "image/png")),
+        "jpg" | "jpeg" => Some(("jpg", "image/jpeg")),
+        "gif" => Some(("gif", "image/gif")),
+        "webp" => Some(("webp", "image/webp")),
+        "svg" => Some(("svg", "image/svg+xml")),
+        _ => None,
+    }
+}
+
+/// Reads and checks every `--image` file. Call it before any request so a bad path fails
+/// without side effects.
+pub(crate) fn load_images(paths: &[PathBuf]) -> Result<Vec<Image>> {
+    paths.iter().map(|path| load_image(path)).collect()
+}
+
+fn load_image(path: &Path) -> Result<Image> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    let (ext, mime) = image_kind(&ext).ok_or_else(|| {
+        BibuError::Usage(format!(
+            "{}: unsupported image type; use png, jpg, jpeg, gif, webp or svg",
+            path.display()
+        ))
+    })?;
+    let bytes = std::fs::read(path)
+        .map_err(|e| BibuError::Usage(format!("cannot read {}: {e}", path.display())))?;
+    let stem: String = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("image")
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    Ok(Image {
+        stem,
+        ext,
+        mime,
+        bytes,
+    })
+}
+
+/// Uploads each image to the repository downloads under a unique name and appends a markdown
+/// image link for it to `body`.
+pub(crate) fn attach_images(
+    client: &Client,
+    repo: &repo::RepoRef,
+    body: &str,
+    images: Vec<Image>,
+) -> Result<String> {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
+    let mut text = body.trim_end().to_string();
+    for (n, image) in images.into_iter().enumerate() {
+        let name = format!("bibu-{stamp}-{}-{}.{}", n + 1, image.stem, image.ext);
+        let alt = image.stem.clone();
+        downloads::upload(
+            client,
+            repo,
+            FilePart {
+                name: name.clone(),
+                mime: image.mime.to_string(),
+                bytes: image.bytes,
+            },
+        )?;
+        if !text.is_empty() {
+            text.push_str("\n\n");
+        }
+        text.push_str(&format!("![{alt}]({})", downloads::web_url(repo, &name)));
+    }
+    Ok(text)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,5 +241,22 @@ mod tests {
     #[test]
     fn multiline_text_keeps_inner_newlines() {
         assert_eq!(read_text(&PIPE_IN, Some("a\nb\n")).unwrap(), "a\nb");
+    }
+
+    #[test]
+    fn images_are_checked_before_any_upload() {
+        let dir = tempfile::tempdir().unwrap();
+        let png = dir.path().join("my shot.PNG");
+        std::fs::write(&png, b"x").unwrap();
+        let ok = load_images(&[png]).unwrap();
+        assert_eq!((ok[0].stem.as_str(), ok[0].ext), ("my-shot", "png"));
+
+        let txt = dir.path().join("a.txt");
+        std::fs::write(&txt, b"x").unwrap();
+        assert!(matches!(load_images(&[txt]), Err(BibuError::Usage(_))));
+        assert!(matches!(
+            load_images(&[dir.path().join("missing.png")]),
+            Err(BibuError::Usage(_))
+        ));
     }
 }
