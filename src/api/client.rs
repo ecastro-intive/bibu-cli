@@ -2,7 +2,8 @@
 
 use std::time::Duration;
 
-use reqwest::blocking::Client as Http;
+use reqwest::blocking::multipart::{Form, Part};
+use reqwest::blocking::{Client as Http, RequestBuilder};
 use reqwest::header::{ACCEPT, RETRY_AFTER};
 use reqwest::Method;
 use serde::de::DeserializeOwned;
@@ -13,6 +14,13 @@ use crate::auth::Authenticator;
 use crate::error::{BibuError, Result};
 
 const TIMEOUT: Duration = Duration::from_secs(30);
+
+/// One file of a multipart upload.
+pub struct FilePart {
+    pub name: String,
+    pub mime: String,
+    pub bytes: Vec<u8>,
+}
 
 pub struct Client {
     http: Http,
@@ -97,10 +105,33 @@ impl Client {
         accept: &str,
     ) -> Result<String> {
         let mut request = self.http.request(method, url).header(ACCEPT, accept);
-        request = self.auth.apply(request);
         if let Some(body) = body {
             request = request.json(body);
         }
+        self.dispatch(request)
+    }
+
+    /// `POST {base}{path}` as `multipart/form-data` with one `files` part per file.
+    pub fn upload_files(&self, path: &str, files: Vec<FilePart>) -> Result<()> {
+        let mut form = Form::new();
+        for file in files {
+            let part = Part::bytes(file.bytes)
+                .file_name(file.name)
+                .mime_str(&file.mime)
+                .map_err(|e| BibuError::Other(format!("invalid content type: {e}")))?;
+            form = form.part("files", part);
+        }
+        let request = self
+            .http
+            .post(self.build_url(path, &[]))
+            .header(ACCEPT, "application/json")
+            .multipart(form);
+        self.dispatch(request).map(drop)
+    }
+
+    /// Adds the credentials, sends, and maps the response to the body text or an error.
+    fn dispatch(&self, request: RequestBuilder) -> Result<String> {
+        let request = self.auth.apply(request);
 
         let response = request
             .send()

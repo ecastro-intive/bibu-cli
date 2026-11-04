@@ -152,11 +152,19 @@ bibu pr comment add 12 --file src/app.py --line 30 "Why this default?" # one lin
 bibu pr comment add 12 -f src/app.py -l 30 --end-line 35 "..."          # a range
 bibu pr comment add 12 --file src/app.py --line 2 --old-side "..."     # a removed line (old version)
 echo "long text" | bibu pr comment add 12 --file src/app.py --line 30  # text from stdin (or pass -)
+bibu pr comment add 12 --image before.png --image after.png "Before and after"  # with images
 bibu pr comment reply 12 COMMENT_ID "Agreed"
 bibu pr comment edit 12 COMMENT_ID "New text"
 bibu pr comment delete 12 COMMENT_ID            # asks; needs --yes without a terminal
 bibu pr comment resolve 12 COMMENT_ID           # and: reopen
 ```
+
+`--image PATH` (repeatable, also on `pr create`, `pr edit`, `comment reply` and `comment edit`) uploads a
+png, jpg, gif, webp or svg file to the repository's Downloads and appends it to the text as a markdown
+image. Bitbucket's API has no attachments, so Downloads is the only place to upload to: the token needs
+`write:repository:bitbucket`, anyone who can read the repository can open the file, and it counts toward
+the repository's storage. On `pr edit`, `--image` without `--description` appends to the current
+description. To embed an image you host yourself, write `![alt](https://...)` in the text instead.
 
 `list` shows threads oldest first, with replies indented under their parent. Deleted comments are
 hidden unless `--include-deleted`. `--unresolved`, `--inline` and `--file` work on whole threads: a

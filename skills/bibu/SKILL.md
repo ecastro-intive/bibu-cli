@@ -77,7 +77,12 @@ bibu pr comment add 12 --file src/app.py --line 30 --end-line 36 "This whole blo
 bibu pr comment add 12 --file src/app.py --line 2 --old-side "Why was this removed?"
 bibu pr comment add 12 --file docs/notes.md "General note about this file."
 bibu pr comment add 12 "Overall this looks good, two small things inline."
+bibu pr comment add 12 --image screenshot.png "Rendered result of this change."
 ```
+
+`--image PATH` (repeatable; also on `pr create`, `pr edit`, `comment reply`, `comment edit`) uploads
+the file to the repository downloads and embeds it. It needs the `write:repository:bitbucket` scope and
+the file is visible to anyone who can read the repository, so never attach anything sensitive.
 
 Line numbers refer to the **new** version of the file unless `--old-side` is given. Use the diff to
 pick them. Keep each comment to one point. Pipe long text in instead of quoting it:

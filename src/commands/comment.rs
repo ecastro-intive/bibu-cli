@@ -6,7 +6,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
-use super::{confirm, read_text};
+use super::{attach_images, confirm, load_images, read_text};
 use crate::api::models::comment::{Comment, Inline};
 use crate::api::models::Account;
 use crate::api::{comments as api, Client};
@@ -385,16 +385,19 @@ pub fn run(
         CommentCommand::Add {
             id,
             text,
+            image,
             file,
             line,
             end_line,
             old_side,
         } => {
+            let images = load_images(image)?;
             let text = read_text(term, text.as_deref())?;
             let anchor = match file {
                 Some(file) => Some(Anchor::new(file, *line, *end_line, *old_side)?),
                 None => None,
             };
+            let text = attach_images(client, repo, &text, images)?;
             let created = api::create(
                 client,
                 repo,
@@ -407,8 +410,11 @@ pub fn run(
             id,
             comment_id,
             text,
+            image,
         } => {
+            let images = load_images(image)?;
             let text = read_text(term, text.as_deref())?;
+            let text = attach_images(client, repo, &text, images)?;
             let created = api::create(
                 client,
                 repo,
@@ -421,8 +427,11 @@ pub fn run(
             id,
             comment_id,
             text,
+            image,
         } => {
+            let images = load_images(image)?;
             let text = read_text(term, text.as_deref())?;
+            let text = attach_images(client, repo, &text, images)?;
             let updated = api::update(
                 client,
                 repo,
