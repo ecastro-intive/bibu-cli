@@ -16,6 +16,7 @@ permissions:
   contents: read
   checks: read
   pull-requests: write
+  statuses: write
 
 defaults:
   run:
@@ -37,6 +38,7 @@ jobs:
       SHA: ${{ github.event.workflow_run.head_sha }}
       PR: ${{ github.event.workflow_run.pull_requests[0].number }}
       GH_TOKEN: ${{ github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       # Default branch: holds the review rules and the posting script. The PR cannot change them.
       - uses: actions/checkout@v4
@@ -58,6 +60,14 @@ jobs:
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # This workflow runs on main's commit, so its own check never shows on the PR. A commit status
+      # on the PR head is what the ruleset can require: pending now, success or failure below.
+      - name: Mark the review as running
+        if: steps.gate.outputs.ready == 'true'
+        run: >-
+          gh api "repos/$REPO/statuses/$SHA" -f state=pending -f context=claude-review
+          -f description="Review running" -f target_url="$RUN_URL"
 
       # The PR head, in its own folder. Full history so `git diff origin/main...HEAD` works.
       - uses: actions/checkout@v4
@@ -127,3 +137,23 @@ jobs:
       - name: Post findings as inline comments
         if: steps.gate.outputs.ready == 'true'
         run: python3 -I base/.github/scripts/post_review.py "$RUNNER_TEMP/review.json" "$REPO" "$PR" "$SHA"
+
+      - name: Set the claude-review status
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          blockers=$(jq '[.structured_output.findings[] | select(.severity == "blocker")] | length' \
+            "$RUNNER_TEMP/review.json")
+          if [ "$blockers" -eq 0 ]; then
+            state=success; description="No blockers"
+          else
+            state=failure; description="$blockers blocker(s), see the review"
+          fi
+          gh api "repos/$REPO/statuses/$SHA" -f state="$state" -f context=claude-review \
+            -f description="$description" -f target_url="$RUN_URL"
+
+      # A crashed or timed out run must not leave the status pending, or the PR hangs.
+      - name: Report a failed review run
+        if: failure() && steps.gate.outputs.ready == 'true'
+        run: >-
+          gh api "repos/$REPO/statuses/$SHA" -f state=error -f context=claude-review
+          -f description="Review job failed, see the run" -f target_url="$RUN_URL"
