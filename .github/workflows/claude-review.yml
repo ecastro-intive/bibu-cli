@@ -1,0 +1,129 @@
+name: Claude review
+
+# Runs after CI or the release plan finish on a pull request to main. The gate step then
+# makes sure every check on the commit is green before spending an API call.
+on:
+  workflow_run:
+    workflows: [CI, Release]
+    types: [completed]
+
+# One review per commit, even when both workflows finish at the same moment.
+concurrency:
+  group: claude-review-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  review:
+    name: Claude review
+    # Same-repo PRs only: fork PRs must never get the API key.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.pull_requests[0].base.ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      REPO: ${{ github.repository }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Default branch: holds the review rules and the posting script. The PR cannot change them.
+      - uses: actions/checkout@v4
+        with:
+          path: base
+          persist-credentials: false
+
+      - name: Wait for every other check to be green
+        id: gate
+        run: |
+          not_green=$(gh api "repos/$REPO/commits/$SHA/check-runs" --paginate \
+            --jq '.check_runs[]
+              | select(.status != "completed"
+                  or ((.conclusion // "") | IN("success", "skipped", "neutral") | not))
+              | "\(.name) (\(.status)/\(.conclusion))"')
+          if [ -n "$not_green" ]; then
+            echo "::notice::Skipping review, checks not green yet:"$'\n'"$not_green"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The PR head, in its own folder. Full history so `git diff origin/main...HEAD` works.
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          node-version: 22
+
+      - name: Install Claude Code
+        if: steps.gate.outputs.ready == 'true'
+        run: npm install -g @anthropic-ai/claude-code@2.1.332
+
+      - name: Build the prompt
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          meta=$(gh pr view "$PR" --repo "$REPO" --json title,headRefName,baseRefName \
+            --jq '"title: \(.title)\nbranch: \(.headRefName)\nbase: \(.baseRefName)"')
+          {
+            echo "Analyse the changes in this pull request for security issues, error handling gaps, and test coverage."
+            echo
+            echo "Inspect them with \`git diff origin/main...HEAD\`; read other files only when needed."
+            echo "You are read-only: do not modify files or post anything. Your only output is the JSON"
+            echo "that matches the schema. \`line\` is the line number in the new version of the file."
+            echo "The report format section of the review instructions is replaced by that schema:"
+            echo "the overview goes in \`summary\`, each finding in \`findings\`."
+            echo
+            echo "<pr-metadata>"
+            echo "$meta"
+            echo "</pr-metadata>"
+            echo
+            echo "<review-instructions>"
+            cat base/.github/REVIEW.md
+            echo "</review-instructions>"
+          } > "$RUNNER_TEMP/prompt.md"
+
+      - name: Run Claude
+        if: steps.gate.outputs.ready == 'true'
+        working-directory: pr
+        timeout-minutes: 10
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REVIEW_SCHEMA: >-
+            {"type":"object","additionalProperties":false,"required":["summary","findings"],
+            "properties":{"summary":{"type":"string","description":"One or two sentences on what the PR does."},
+            "findings":{"type":"array","items":{"type":"object","additionalProperties":false,
+            "required":["file","line","severity","message"],"properties":{
+            "file":{"type":"string","description":"Repo-relative path."},
+            "line":{"type":"integer","minimum":1,"description":"Line in the new version of the file."},
+            "severity":{"type":"string","enum":["blocker","should_fix"]},
+            "message":{"type":"string","description":"What is wrong, why it matters here, and a concrete fix."}}}}}}
+        # The prompt comes from stdin and unlisted tools are denied, so nothing can wait for input.
+        # tee prints the JSON to the job log and keeps a copy for the next step.
+        run: |
+          claude -p \
+            --output-format json \
+            --json-schema "$REVIEW_SCHEMA" \
+            --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)" \
+            < "$RUNNER_TEMP/prompt.md" | tee "$RUNNER_TEMP/review.json"
+
+      - name: Post findings as inline comments
+        if: steps.gate.outputs.ready == 'true'
+        run: python3 -I base/.github/scripts/post_review.py "$RUNNER_TEMP/review.json" "$REPO" "$PR" "$SHA"
