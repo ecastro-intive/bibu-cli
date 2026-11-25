@@ -19,3 +19,7 @@ install-updater = false
 pr-run-mode = "plan"
 # A reviewer of the `release` environment must approve before the release is published
 global-artifacts-jobs = ["./approve-release"]
+
+# macos-14 was retired by GitHub on 2026-11-02
+[dist.github-custom-runners]
+aarch64-apple-darwin = "macos-15"
