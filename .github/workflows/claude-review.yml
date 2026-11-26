@@ -11,9 +11,10 @@ on:
     workflows: [CI, Release]
     types: [completed]
 
-# One review per commit, even when both workflows finish at the same moment.
+# One review at a time per PR. A newer push cancels the older run, so an outdated run can never
+# overwrite the findings state of a newer one. Runs without a PR (pushes to main) get their own group.
 concurrency:
-  group: claude-review-${{ github.event.workflow_run.head_sha }}
+  group: claude-review-${{ github.event.workflow_run.pull_requests[0].number || github.run_id }}
   cancel-in-progress: true
 
 # Nothing by default: every job asks for exactly what it needs.
@@ -82,6 +83,7 @@ jobs:
     # Read only on purpose. Claude can write files here (git show --output=...), so nothing in this
     # job may be trusted later: report starts from its own checkout and reads only review.json.
     permissions:
+      actions: read
       contents: read
       pull-requests: read
     steps:
@@ -106,6 +108,13 @@ jobs:
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@2.1.332
 
+      # The findings of the last review of this PR, from an earlier run. Missing or unusable state
+      # just means a full review from scratch, which can only report more, never less.
+      - name: Fetch the previous review state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash base/.github/scripts/fetch_review_state.sh
+
       - name: Build the prompt
         env:
           GH_TOKEN: ${{ github.token }}
@@ -125,10 +134,20 @@ jobs:
             echo "$meta"
             echo "</pr-metadata>"
             echo
+            python3 -I base/.github/scripts/post_review.py context prev/review-state.json
+            echo
             echo "<review-instructions>"
             cat base/.github/REVIEW.md
             echo "</review-instructions>"
           } > "$RUNNER_TEMP/prompt.md"
+          # Show what Claude is given, including the previous findings. stop-commands keeps any
+          # "::" text in the PR title or in a finding from being run as a workflow command.
+          token=$(openssl rand -hex 16)
+          echo "::group::Prompt sent to Claude"
+          echo "::stop-commands::$token"
+          cat "$RUNNER_TEMP/prompt.md"
+          echo "::$token::"
+          echo "::endgroup::"
 
       - name: Run Claude
         working-directory: pr
@@ -138,14 +157,20 @@ jobs:
           # Defense in depth: this step reads untrusted PR content and gets no GitHub token.
           GH_TOKEN: ""
           REVIEW_SCHEMA: >-
-            {"type":"object","additionalProperties":false,"required":["summary","findings"],
+            {"type":"object","additionalProperties":false,"required":["summary","findings","resolved"],
             "properties":{"summary":{"type":"string","description":"One or two sentences on what the PR does."},
             "findings":{"type":"array","items":{"type":"object","additionalProperties":false,
-            "required":["file","line","severity","message"],"properties":{
+            "required":["file","line","severity","status","message"],"properties":{
             "file":{"type":"string","description":"Repo-relative path."},
             "line":{"type":"integer","minimum":1,"description":"Line in the new version of the file."},
             "severity":{"type":"string","enum":["blocker","should_fix"]},
-            "message":{"type":"string","description":"What is wrong, why it matters here, and a concrete fix."}}}}}}
+            "status":{"type":"string","enum":["new","still_open"],"description":"still_open for a previous finding that is still unaddressed."},
+            "previous_id":{"type":"string","description":"Id of the previous finding this continues. Required when status is still_open."},
+            "message":{"type":"string","description":"What is wrong, why it matters here, and a concrete fix."}}}},
+            "resolved":{"type":"array","description":"Previous findings that are now fixed. Empty when there were none.","items":{"type":"object","additionalProperties":false,
+            "required":["previous_id","reason"],"properties":{
+            "previous_id":{"type":"string"},
+            "reason":{"type":"string","description":"Why it counts as fixed, for example line removed."}}}}}}
         # The prompt comes from stdin and unlisted tools are denied, so nothing can wait for input.
         # tee prints the JSON to the job log and keeps a copy for the artifact.
         run: |
@@ -170,6 +195,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      actions: read
       contents: read
       pull-requests: write
       statuses: write
@@ -187,6 +213,14 @@ jobs:
           name: review
           path: result
 
+      # Fetched again here, with the trusted script from main: the verdict and the next state must
+      # not depend on anything the Claude job handed over except review.json.
+      - name: Fetch the previous review state
+        if: needs.review.result == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash base/.github/scripts/fetch_review_state.sh
+
       # Set before posting comments, so the status reflects the review and not whether GitHub
       # accepted every inline comment. The verdict logic is unit tested in post_review.py and exits
       # non-zero on an unreadable response, which fails this step and so ends in the error status.
@@ -196,7 +230,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          verdict=$(python3 -I base/.github/scripts/post_review.py verdict result/review.json)
+          verdict=$(python3 -I base/.github/scripts/post_review.py verdict result/review.json \
+            --previous prev/review-state.json)
           state=$(head -n 1 <<< "$verdict")
           description=$(tail -n 1 <<< "$verdict")
           gh api "repos/$REPO/statuses/$SHA" -f state="$state" -f context=claude-review \
@@ -206,7 +241,19 @@ jobs:
         if: needs.review.result == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 -I base/.github/scripts/post_review.py post result/review.json "$REPO" "$PR" "$SHA"
+        run: >-
+          python3 -I base/.github/scripts/post_review.py post result/review.json "$REPO" "$PR" "$SHA"
+          --previous prev/review-state.json --state-out review-state.json
+
+      # The findings still open after this run, for the next one. Written only after the review was
+      # posted; fixed findings are not in it, so they never come back.
+      - uses: actions/upload-artifact@v4
+        if: needs.review.result == 'success'
+        with:
+          name: review-state-pr-${{ env.PR }}
+          path: review-state.json
+          if-no-files-found: error
+          retention-days: 30
 
       # Skipped once the real status is set, so a comment posting failure cannot overwrite it. When a
       # newer push cancels this run, the newer run sets its own pending and final status afterwards.
