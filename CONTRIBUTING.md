@@ -136,14 +136,30 @@ Releases are not code-signed; see the README for why that is fine for installer-
 - One logical change per PR, with a title in the commit format.
 - Describe what changed and how you verified it. Mention anything you could not test against
   real Bitbucket.
-- CI must be green.
+- CI must be green, and so must the `claude-review` check, see below.
+
+## Automated review
+
+Once CI and the release plan are green, `.github/workflows/claude-review.yml` has Claude review the
+pull request against `.github/REVIEW.md`. It posts the findings as inline comments and sets the
+`claude-review` status on the PR's head commit:
+
+- `success`: no blockers (findings marked "should fix" do not block).
+- `failure`: at least one blocker. Fix it and push, or re-run the workflow.
+- `error`: the review job itself failed or timed out, see the run linked from the status.
+
+The review rules and the workflow are read from `main`, so a PR cannot change its own reviewer.
+Fork PRs never get the review, because the API key is not available to forks. For them the status
+is never reported and stays pending, so a maintainer reviews the code by hand and merges as the
+repository admin.
 
 ## Repository rules
 
 These live in the GitHub settings, not in the code (Settings, Rules and Environments):
 
 - `main` is protected by a ruleset: no direct pushes, force pushes or deletion. Changes go through a
-  pull request that needs CI green and an approval from the code owner (`.github/CODEOWNERS`).
+  pull request that needs CI green, the `claude-review` status (see Automated review) and an
+  approval from the code owner (`.github/CODEOWNERS`).
 - The repository admin can merge a pull request without the approval (GitHub never counts an author's
   own approval), but still only through a pull request, never by pushing to `main`.
 - Only the repository admin can create, move or delete `v*` tags.
