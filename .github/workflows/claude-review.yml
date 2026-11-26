@@ -1,7 +1,11 @@
 name: Claude review
 
-# Runs after CI or the release plan finish on a pull request to main. The gate step then
-# makes sure every check on the commit is green before spending an API call.
+# Runs after CI or the release plan finish on a pull request to main. The gate job makes sure every
+# check on the commit is green before an API call is spent.
+#
+# Three jobs, split on trust. Claude reads untrusted PR content and can be prompt injected, so the
+# job that runs it has no write access and shares nothing with the privileged job except one JSON
+# file. The job that sets the status and posts comments starts from a fresh checkout of main.
 on:
   workflow_run:
     workflows: [CI, Release]
@@ -12,18 +16,22 @@ concurrency:
   group: claude-review-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  checks: read
-  pull-requests: write
+# Nothing by default: every job asks for exactly what it needs.
+permissions: {}
 
 defaults:
   run:
     shell: bash
 
+env:
+  REPO: ${{ github.repository }}
+  SHA: ${{ github.event.workflow_run.head_sha }}
+  PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
 jobs:
-  review:
-    name: Claude review
+  gate:
+    name: Gate
     # Same-repo PRs only: fork PRs must never get the API key.
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
@@ -31,21 +39,17 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.pull_requests[0].base.ref == 'main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      REPO: ${{ github.repository }}
-      SHA: ${{ github.event.workflow_run.head_sha }}
-      PR: ${{ github.event.workflow_run.pull_requests[0].number }}
-      GH_TOKEN: ${{ github.token }}
+    timeout-minutes: 5
+    permissions:
+      checks: read
+      statuses: write
+    outputs:
+      ready: ${{ steps.gate.outputs.ready }}
     steps:
-      # Default branch: holds the review rules and the posting script. The PR cannot change them.
-      - uses: actions/checkout@v4
-        with:
-          path: base
-          persist-credentials: false
-
       - name: Wait for every other check to be green
         id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           not_green=$(gh api "repos/$REPO/commits/$SHA/check-runs" --paginate \
             --jq '.check_runs[]
@@ -59,9 +63,36 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # This workflow runs on main's commit, so its own check never shows on the PR. A commit status
+      # on the PR head is what the ruleset can require: pending now, success or failure in report.
+      - name: Mark the review as running
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh api "repos/$REPO/statuses/$SHA" -f state=pending -f context=claude-review
+          -f description="Review running" -f target_url="$RUN_URL"
+
+  review:
+    name: Claude review
+    needs: gate
+    if: needs.gate.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Read only on purpose. Claude can write files here (git show --output=...), so nothing in this
+    # job may be trusted later: report starts from its own checkout and reads only review.json.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # Default branch: the review rules. The PR cannot change them.
+      - uses: actions/checkout@v4
+        with:
+          path: base
+          persist-credentials: false
+
       # The PR head, in its own folder. Full history so `git diff origin/main...HEAD` works.
       - uses: actions/checkout@v4
-        if: steps.gate.outputs.ready == 'true'
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           path: pr
@@ -69,16 +100,15 @@ jobs:
           persist-credentials: false
 
       - uses: actions/setup-node@v4
-        if: steps.gate.outputs.ready == 'true'
         with:
           node-version: 22
 
       - name: Install Claude Code
-        if: steps.gate.outputs.ready == 'true'
         run: npm install -g @anthropic-ai/claude-code@2.1.332
 
       - name: Build the prompt
-        if: steps.gate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           meta=$(gh pr view "$PR" --repo "$REPO" --json title,headRefName,baseRefName \
             --jq '"title: \(.title)\nbranch: \(.headRefName)\nbase: \(.baseRefName)"')
@@ -101,11 +131,12 @@ jobs:
           } > "$RUNNER_TEMP/prompt.md"
 
       - name: Run Claude
-        if: steps.gate.outputs.ready == 'true'
         working-directory: pr
         timeout-minutes: 10
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Defense in depth: this step reads untrusted PR content and gets no GitHub token.
+          GH_TOKEN: ""
           REVIEW_SCHEMA: >-
             {"type":"object","additionalProperties":false,"required":["summary","findings"],
             "properties":{"summary":{"type":"string","description":"One or two sentences on what the PR does."},
@@ -116,7 +147,7 @@ jobs:
             "severity":{"type":"string","enum":["blocker","should_fix"]},
             "message":{"type":"string","description":"What is wrong, why it matters here, and a concrete fix."}}}}}}
         # The prompt comes from stdin and unlisted tools are denied, so nothing can wait for input.
-        # tee prints the JSON to the job log and keeps a copy for the next step.
+        # tee prints the JSON to the job log and keeps a copy for the artifact.
         run: |
           claude -p \
             --output-format json \
@@ -124,6 +155,65 @@ jobs:
             --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)" \
             < "$RUNNER_TEMP/prompt.md" | tee "$RUNNER_TEMP/review.json"
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: review
+          path: ${{ runner.temp }}/review.json
+          if-no-files-found: error
+          retention-days: 7
+
+  report:
+    name: Report
+    needs: [gate, review]
+    # always(): a crashed, timed out or cancelled review must still end in a status, or the PR hangs.
+    if: always() && needs.gate.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
+    steps:
+      # Fresh checkout of the default branch: the script that runs with the write token below
+      # never touches anything the Claude job could have changed.
+      - uses: actions/checkout@v4
+        with:
+          path: base
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        if: needs.review.result == 'success'
+        with:
+          name: review
+          path: result
+
+      # Set before posting comments, so the status reflects the review and not whether GitHub
+      # accepted every inline comment. The verdict logic is unit tested in post_review.py and exits
+      # non-zero on an unreadable response, which fails this step and so ends in the error status.
+      - name: Set the claude-review status
+        id: status
+        if: needs.review.result == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          verdict=$(python3 -I base/.github/scripts/post_review.py verdict result/review.json)
+          state=$(head -n 1 <<< "$verdict")
+          description=$(tail -n 1 <<< "$verdict")
+          gh api "repos/$REPO/statuses/$SHA" -f state="$state" -f context=claude-review \
+            -f description="$description" -f target_url="$RUN_URL"
+
       - name: Post findings as inline comments
-        if: steps.gate.outputs.ready == 'true'
-        run: python3 -I base/.github/scripts/post_review.py "$RUNNER_TEMP/review.json" "$REPO" "$PR" "$SHA"
+        if: needs.review.result == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I base/.github/scripts/post_review.py post result/review.json "$REPO" "$PR" "$SHA"
+
+      # Skipped once the real status is set, so a comment posting failure cannot overwrite it. When a
+      # newer push cancels this run, the newer run sets its own pending and final status afterwards.
+      - name: Report a failed review run
+        if: always() && steps.status.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh api "repos/$REPO/statuses/$SHA" -f state=error -f context=claude-review
+          -f description="Review job failed, see the run" -f target_url="$RUN_URL"

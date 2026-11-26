@@ -1,7 +1,11 @@
-"""Post the structured findings from `claude -p --output-format json` as one PR review.
+"""Turn the output of `claude -p --output-format json` into a PR review and a commit status.
 
-Usage: post_review.py <claude-output.json> <owner/repo> <pr-number> <head-sha>
-Needs the `gh` CLI with GH_TOKEN set.
+Usage:
+  post_review.py verdict <claude-output.json>
+      Prints the commit status state (success or failure) and its description, one per line.
+      Exits non-zero when the output cannot be read, so an unreadable review never passes.
+  post_review.py post <claude-output.json> <owner/repo> <pr-number> <head-sha>
+      Posts the findings as one PR review. Needs the `gh` CLI with GH_TOKEN set.
 """
 
 import json
@@ -24,6 +28,25 @@ def extract(data):
     if not isinstance(out, dict):
         raise ReviewError("claude output has no structured_output")
     return out
+
+
+def blocker_count(out):
+    return sum(f["severity"] == "blocker" for f in out.get("findings", []))
+
+
+def blockers_label(count):
+    if count == 0:
+        return "No blockers"
+    return f"{count} blocker{'s' if count > 1 else ''}"
+
+
+def verdict(data):
+    """The commit status for a Claude response: (state, description). Raises on a bad response,
+    so a review that could not be read never passes."""
+    count = blocker_count(extract(data))
+    if count == 0:
+        return "success", blockers_label(0)
+    return "failure", f"{blockers_label(count)}, see the review"
 
 
 def valid_lines(patch):
@@ -56,14 +79,12 @@ def build_review(out, patches, sha):
         else:
             loose.append(f"- {label(f['severity'])} `{path}:{line}`: {f['message']}")
 
-    blockers = sum(f["severity"] == "blocker" for f in out.get("findings", []))
-    verdict = "No blockers" if blockers == 0 else f"{blockers} blocker{'s' if blockers > 1 else ''}"
     parts = [out.get("summary", "").strip()]
     if not out.get("findings"):
         parts.append("No issues found.")
     if loose:
         parts.append("Findings outside the changed lines:\n\n" + "\n".join(loose))
-    parts.append(f"**{verdict}**")
+    parts.append(f"**{blockers_label(blocker_count(out))}**")
     return {
         "commit_id": sha,
         "event": "COMMENT",
@@ -87,13 +108,27 @@ def changed_patches(repo, pr):
     return {f["filename"]: f.get("patch") for f in files}
 
 
-def main(argv):
-    path, repo, pr, sha = argv[1:5]
+def load(path):
     with open(path, encoding="utf-8") as fh:
-        out = extract(json.load(fh))
-    review = build_review(out, changed_patches(repo, pr), sha)
-    gh("api", f"repos/{repo}/pulls/{pr}/reviews", "--input", "-", stdin=json.dumps(review))
-    print(f"posted review with {len(review['comments'])} inline comment(s)")
+        return json.load(fh)
+
+
+def main(argv):
+    command = argv[1] if len(argv) > 1 else ""
+    if command == "verdict" and len(argv) == 3:
+        state, description = verdict(load(argv[2]))
+        print(state)
+        print(description)
+    elif command == "post" and len(argv) == 6:
+        path, repo, pr, sha = argv[2:6]
+        review = build_review(extract(load(path)), changed_patches(repo, pr), sha)
+        gh("api", f"repos/{repo}/pulls/{pr}/reviews", "--input", "-", stdin=json.dumps(review))
+        print(f"posted review with {len(review['comments'])} inline comment(s)")
+    else:
+        raise ReviewError(
+            "usage: post_review.py verdict <output.json> | "
+            "post <output.json> <owner/repo> <pr> <head-sha>"
+        )
 
 
 if __name__ == "__main__":
