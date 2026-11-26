@@ -148,6 +148,13 @@ pull request against `.github/REVIEW.md`. It posts the findings as inline commen
 - `failure`: at least one blocker. Fix it and push, or re-run the workflow.
 - `error`: the review job itself failed or timed out, see the run linked from the status.
 
+Reviews are incremental. After each run the findings that are still open are saved as the
+`review-state-pr-<number>` artifact (kept 30 days), and the next run hands them back to Claude,
+which reports only what is new or still unaddressed. A fixed finding is never commented again. New
+findings are inline comments; findings that are still open are listed in the review body, because
+their original comment is already on the PR, and they keep counting towards the status. If the
+state is missing or expired, the PR simply gets a full review.
+
 The review rules and the workflow are read from `main`, so a PR cannot change its own reviewer.
 Claude runs in a job with no write access, and a separate job on a fresh checkout of `main` sets
 the status and posts the comments, so a prompt injected review cannot reach the token.
