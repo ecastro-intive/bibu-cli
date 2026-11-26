@@ -150,13 +150,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          blockers=$(jq '[.structured_output.findings[] | select(.severity == "blocker")] | length' \
-            "$RUNNER_TEMP/review.json")
-          if [ "$blockers" -eq 0 ]; then
-            state=success; description="No blockers"
-          else
-            state=failure; description="$blockers blocker(s), see the review"
-          fi
+          # The verdict logic lives in post_review.py, where it is unit tested. It exits non-zero on
+          # an unreadable response, which fails this step and so ends in the error status.
+          verdict=$(python3 -I base/.github/scripts/post_review.py verdict "$RUNNER_TEMP/review.json")
+          state=$(head -n 1 <<< "$verdict")
+          description=$(tail -n 1 <<< "$verdict")
           gh api "repos/$REPO/statuses/$SHA" -f state="$state" -f context=claude-review \
             -f description="$description" -f target_url="$RUN_URL"
 
@@ -164,7 +162,7 @@ jobs:
         if: steps.gate.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 -I base/.github/scripts/post_review.py "$RUNNER_TEMP/review.json" "$REPO" "$PR" "$SHA"
+        run: python3 -I base/.github/scripts/post_review.py post "$RUNNER_TEMP/review.json" "$REPO" "$PR" "$SHA"
 
       # A crashed, timed out or cancelled run must not leave the status pending, or the PR hangs.
       # Skipped once the real status is set, so a comment posting failure cannot overwrite it. When a

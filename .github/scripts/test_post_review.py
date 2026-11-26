@@ -1,5 +1,10 @@
 """Tests for post_review.py. Run: python3 -m unittest discover -s .github/scripts"""
 
+import contextlib
+import io
+import json
+import os
+import tempfile
 import unittest
 
 import post_review as pr
@@ -112,6 +117,69 @@ class Extract(unittest.TestCase):
     def test_missing_structured_output_raises(self):
         with self.assertRaises(pr.ReviewError):
             pr.extract({"is_error": False, "result": "free text"})
+
+
+def envelope(findings):
+    return {"is_error": False, "structured_output": output(findings)}
+
+
+class Verdict(unittest.TestCase):
+    # The verdict decides whether a PR can merge, so every branch of it is pinned here.
+    def test_no_findings_is_success(self):
+        self.assertEqual(pr.verdict(envelope([])), ("success", "No blockers"))
+
+    def test_should_fix_alone_does_not_block(self):
+        data = envelope([finding(severity="should_fix"), finding(severity="should_fix")])
+        self.assertEqual(pr.verdict(data), ("success", "No blockers"))
+
+    def test_one_blocker_fails_with_a_singular_description(self):
+        self.assertEqual(
+            pr.verdict(envelope([finding()])), ("failure", "1 blocker, see the review")
+        )
+
+    def test_only_blockers_are_counted(self):
+        data = envelope([finding(), finding(severity="should_fix"), finding(line=12)])
+        self.assertEqual(pr.verdict(data), ("failure", "2 blockers, see the review"))
+
+    def test_null_structured_output_raises_instead_of_passing(self):
+        with self.assertRaises(pr.ReviewError):
+            pr.verdict({"is_error": False, "structured_output": None})
+
+    def test_error_envelope_raises_instead_of_passing(self):
+        with self.assertRaises(pr.ReviewError):
+            pr.verdict({"is_error": True, "result": "boom"})
+
+    def test_missing_structured_output_raises_instead_of_passing(self):
+        with self.assertRaises(pr.ReviewError):
+            pr.verdict({"result": "free text"})
+
+
+class VerdictCommand(unittest.TestCase):
+    def run_command(self, data):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "review.json")
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                pr.main(["post_review.py", "verdict", path])
+            return out.getvalue()
+
+    def test_prints_the_state_then_the_description(self):
+        self.assertEqual(
+            self.run_command(envelope([finding()])), "failure\n1 blocker, see the review\n"
+        )
+
+    def test_a_clean_review_prints_success(self):
+        self.assertEqual(self.run_command(envelope([])), "success\nNo blockers\n")
+
+    def test_a_bad_envelope_raises_so_the_step_exits_non_zero(self):
+        with self.assertRaises(pr.ReviewError):
+            self.run_command({"is_error": False, "structured_output": None})
+
+    def test_unknown_command_raises(self):
+        with self.assertRaises(pr.ReviewError):
+            pr.main(["post_review.py", "nope"])
 
 
 if __name__ == "__main__":
