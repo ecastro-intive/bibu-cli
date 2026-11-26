@@ -37,7 +37,7 @@ jobs:
       REPO: ${{ github.repository }}
       SHA: ${{ github.event.workflow_run.head_sha }}
       PR: ${{ github.event.workflow_run.pull_requests[0].number }}
-      GH_TOKEN: ${{ github.token }}
+      # GH_TOKEN is deliberately not set here: only the steps that call gh get it (never Run Claude).
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       # Default branch: holds the review rules and the posting script. The PR cannot change them.
@@ -48,6 +48,8 @@ jobs:
 
       - name: Wait for every other check to be green
         id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           not_green=$(gh api "repos/$REPO/commits/$SHA/check-runs" --paginate \
             --jq '.check_runs[]
@@ -65,6 +67,8 @@ jobs:
       # on the PR head is what the ruleset can require: pending now, success or failure below.
       - name: Mark the review as running
         if: steps.gate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: >-
           gh api "repos/$REPO/statuses/$SHA" -f state=pending -f context=claude-review
           -f description="Review running" -f target_url="$RUN_URL"
@@ -89,6 +93,8 @@ jobs:
 
       - name: Build the prompt
         if: steps.gate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           meta=$(gh pr view "$PR" --repo "$REPO" --json title,headRefName,baseRefName \
             --jq '"title: \(.title)\nbranch: \(.headRefName)\nbase: \(.baseRefName)"')
@@ -116,6 +122,8 @@ jobs:
         timeout-minutes: 10
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # This step reads untrusted PR content: it must not hold a token that can write statuses.
+          GH_TOKEN: ""
           REVIEW_SCHEMA: >-
             {"type":"object","additionalProperties":false,"required":["summary","findings"],
             "properties":{"summary":{"type":"string","description":"One or two sentences on what the PR does."},
@@ -134,12 +142,13 @@ jobs:
             --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)" \
             < "$RUNNER_TEMP/prompt.md" | tee "$RUNNER_TEMP/review.json"
 
-      - name: Post findings as inline comments
-        if: steps.gate.outputs.ready == 'true'
-        run: python3 -I base/.github/scripts/post_review.py "$RUNNER_TEMP/review.json" "$REPO" "$PR" "$SHA"
-
+      # Set before posting comments, so the status reflects the review and not whether GitHub
+      # accepted every inline comment.
       - name: Set the claude-review status
+        id: status
         if: steps.gate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           blockers=$(jq '[.structured_output.findings[] | select(.severity == "blocker")] | length' \
             "$RUNNER_TEMP/review.json")
@@ -151,9 +160,19 @@ jobs:
           gh api "repos/$REPO/statuses/$SHA" -f state="$state" -f context=claude-review \
             -f description="$description" -f target_url="$RUN_URL"
 
-      # A crashed or timed out run must not leave the status pending, or the PR hangs.
+      - name: Post findings as inline comments
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I base/.github/scripts/post_review.py "$RUNNER_TEMP/review.json" "$REPO" "$PR" "$SHA"
+
+      # A crashed, timed out or cancelled run must not leave the status pending, or the PR hangs.
+      # Skipped once the real status is set, so a comment posting failure cannot overwrite it. When a
+      # newer push cancels this run, the newer run sets its own pending and final status afterwards.
       - name: Report a failed review run
-        if: failure() && steps.gate.outputs.ready == 'true'
+        if: (failure() || cancelled()) && steps.gate.outputs.ready == 'true' && steps.status.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: >-
           gh api "repos/$REPO/statuses/$SHA" -f state=error -f context=claude-review
           -f description="Review job failed, see the run" -f target_url="$RUN_URL"
