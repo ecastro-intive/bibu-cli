@@ -149,6 +149,8 @@ pull request against `.github/REVIEW.md`. It posts the findings as inline commen
 - `error`: the review job itself failed or timed out, see the run linked from the status.
 
 The review rules and the workflow are read from `main`, so a PR cannot change its own reviewer.
+Claude runs in a job with no write access, and a separate job on a fresh checkout of `main` sets
+the status and posts the comments, so a prompt injected review cannot reach the token.
 Fork PRs never get the review, because the API key is not available to forks. For them the status
 is never reported and stays pending, so a maintainer reviews the code by hand and merges as the
 repository admin.
